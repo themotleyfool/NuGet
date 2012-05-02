@@ -33,7 +33,7 @@ namespace NuGet.Server.Infrastructure
 
         public override void AddPackage(IPackage package)
         {
-            string fileName = PathResolver.GetPackageFileName(package);
+            string fileName = GetPackageFilePath(package);
             using (Stream stream = package.GetStream())
             {
                 FileSystem.AddFile(fileName, stream);
@@ -51,7 +51,7 @@ namespace NuGet.Server.Infrastructure
 
         public override void RemovePackage(IPackage package)
         {
-            string fileName = PathResolver.GetPackageFileName(package);
+            string fileName = GetPackageFilePath(package);
             FileSystem.DeleteFile(fileName);
         }
 

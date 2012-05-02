@@ -50,6 +50,7 @@
     </Compile>
     <Compile Include="DataServices\Package.cs" />
     <Compile Include="DataServices\PackageContext.cs" />
+    <Compile Include="Infrastructure\OneFolderPerPackageIdPathResolver.cs" />
     <Compile Include="Publishing\PackageService.cs" />
     <Compile Include="Infrastructure\Bindings.cs" />
     <Compile Include="Infrastructure\Helpers.cs" />
