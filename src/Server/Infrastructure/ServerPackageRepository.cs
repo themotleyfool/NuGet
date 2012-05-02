@@ -62,12 +62,12 @@ namespace NuGet.Server.Infrastructure
             return package;
         }
 
-        public Package GetMetadataPackage(IPackage package)
+        public virtual Package GetMetadataPackage(IPackage package)
         {
             return new Package(package, _derivedDataLookup[package]);
         }
 
-        public IQueryable<IPackage> Search(string searchTerm, IEnumerable<string> targetFrameworks, bool allowPrereleaseVersions)
+        public virtual IQueryable<IPackage> Search(string searchTerm, IEnumerable<string> targetFrameworks, bool allowPrereleaseVersions)
         {
             var packages = GetPackages().Find(searchTerm)
                                         .FilterByPrerelease(allowPrereleaseVersions)
@@ -84,7 +84,7 @@ namespace NuGet.Server.Infrastructure
             return packages;
         }
 
-        public IEnumerable<IPackage> FindPackagesById(string packageId)
+        public virtual IEnumerable<IPackage> FindPackagesById(string packageId)
         {
             var localRepository = (LocalPackageRepository)this;
             return localRepository.FindPackagesById(packageId);
@@ -97,13 +97,17 @@ namespace NuGet.Server.Infrastructure
             return VersionUtility.IsCompatible(frameworkName, packageData.SupportedFrameworks);
         }
 
-        private DerivedPackageData CalculateDerivedData(IPackage package, string path)
+        protected virtual DerivedPackageData CalculateDerivedData(IPackage package, string path)
         {
-            byte[] fileBytes;
             using (Stream stream = FileSystem.OpenFile(path))
             {
-                fileBytes = stream.ReadAllBytes();
+                return CalculateDerivedData(package, path, stream);
             }
+        }
+
+        protected virtual DerivedPackageData CalculateDerivedData(IPackage package, string path, Stream stream)
+        {
+            byte[] fileBytes = stream.ReadAllBytes();
 
             return new DerivedPackageData
             {
