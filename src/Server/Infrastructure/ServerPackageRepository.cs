@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using ICSharpCode.SharpZipLib.Zip;
 using Ninject;
 using NuGet.Server.DataServices;
 
@@ -120,13 +121,27 @@ namespace NuGet.Server.Infrastructure
                 PackageHash = Convert.ToBase64String(HashProvider.CalculateHash(fileBytes)),
                 LastUpdated = FileSystem.GetLastModified(path),
                 Published = FileSystem.GetLastModified(path),
-                Created = FileSystem.GetCreated(path),
+                Created = GetZipArchiveCreateDate(new MemoryStream(fileBytes)),
                 IsPrerelease = !package.IsReleaseVersion(),
                 // TODO: Add support when we can make this faster
                 // SupportedFrameworks = package.GetSupportedFrameworks(),
                 Path = path,
                 FullPath = FileSystem.GetFullPath(path)
             };
+        }
+        
+        private DateTimeOffset GetZipArchiveCreateDate(Stream stream)
+        {
+            var f = new ZipFile(stream);
+            foreach (ZipEntry file in f)
+            {
+                if (file.Name.EndsWith(".nuspec"))
+                {
+                    return file.DateTime;
+                }
+            }
+
+            return DateTimeOffset.MinValue;
         }
     }
 }
