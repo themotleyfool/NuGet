@@ -55,6 +55,11 @@ namespace NuGet.Server.Infrastructure
             FileSystem.DeleteFile(fileName);
         }
 
+        public virtual void IncrementDownloadCount(IPackage package)
+        {
+            // not implemented.
+        }
+
         protected override IPackage OpenPackage(string path)
         {
             IPackage package = base.OpenPackage(path);
