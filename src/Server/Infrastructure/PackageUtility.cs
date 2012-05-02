@@ -9,13 +9,22 @@ namespace NuGet.Server.Infrastructure
 {
     public class PackageUtility
     {
-        private static Lazy<string> _packagePhysicalPath = new Lazy<string>(ResolvePackagePath);
+        private static readonly Lazy<string> _luceneIndexPhysicalPath = new Lazy<string>(ResolveLuceneIndexPath);
+        private static readonly Lazy<string> _packagePhysicalPath = new Lazy<string>(ResolvePackagePath);
 
         public static string PackagePhysicalPath
         {
             get
             {
                 return _packagePhysicalPath.Value;
+            }
+        }
+
+        public static string LuceneIndexPhysicalPath
+        {
+            get
+            {
+                return _luceneIndexPhysicalPath.Value;
             }
         }
 
@@ -39,14 +48,21 @@ namespace NuGet.Server.Infrastructure
 
         private static string ResolvePackagePath()
         {
-            // The packagesPath could be an absolute path (rooted and use as is)
-            // or a virtual path (and use as a virtual path)
-            string path = ConfigurationManager.AppSettings["packagesPath"];
+            return MapPathFromAppSetting("packagesPath", "~/Packages");
+        }
+
+        private static string ResolveLuceneIndexPath()
+        {
+            return MapPathFromAppSetting("lucenePath", "~/Lucene");
+        }
+
+        private static string MapPathFromAppSetting(string key, string defaultValue)
+        {
+            var path = ConfigurationManager.AppSettings[key];
 
             if (String.IsNullOrEmpty(path))
             {
-                // Default path
-                return HostingEnvironment.MapPath("~/Packages");
+                path = defaultValue;
             }
 
             if (path.StartsWith("~/"))
