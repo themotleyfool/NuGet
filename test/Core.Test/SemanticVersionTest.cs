@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Globalization;
 using Xunit;
 using Xunit.Extensions;
@@ -100,6 +101,42 @@ namespace NuGet.Test
             // Assert
             Assert.Equal(expected.Version, actual.Version);
             Assert.Equal(expected.SpecialVersion, actual.SpecialVersion);
+        }
+
+        [Theory]
+        [PropertyData("SemVerData")]
+        public void TypeConverterIsRegistered(string versionString, SemanticVersion expected)
+        {
+            // Act
+            var converter = TypeDescriptor.GetConverter(typeof (SemanticVersion));
+
+            // Assert
+            Assert.NotNull(converter);
+            Assert.True(converter.CanConvertFrom(typeof(string)));
+        }
+
+        [Theory]
+        [PropertyData("SemVerData")]
+        public void ConvertToString(string expected, SemanticVersion version)
+        {
+            // Act
+            var converter = TypeDescriptor.GetConverter(typeof (SemanticVersion));
+            var actual = converter.ConvertTo(version, typeof(string));
+
+            // Assert
+            Assert.Equal(version.ToString(), actual);
+        }
+
+        [Theory]
+        [PropertyData("SemVerData")]
+        public void ConvertFromString(string versionString, SemanticVersion expected)
+        {
+            // Act
+            var converter = TypeDescriptor.GetConverter(typeof(SemanticVersion));
+            var actual = converter.ConvertFrom(versionString);
+
+            // Assert
+            Assert.Equal(expected, actual);
         }
 
         public static IEnumerable<object[]> SemVerWithWhiteSpace
