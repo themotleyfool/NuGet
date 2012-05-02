@@ -110,7 +110,9 @@ namespace NuGet.Server.Infrastructure
                 PackageSize = fileBytes.Length,
                 PackageHash = Convert.ToBase64String(HashProvider.CalculateHash(fileBytes)),
                 LastUpdated = FileSystem.GetLastModified(path),
+                Published = FileSystem.GetLastModified(path),
                 Created = FileSystem.GetCreated(path),
+                IsPrerelease = !package.IsReleaseVersion(),
                 // TODO: Add support when we can make this faster
                 // SupportedFrameworks = package.GetSupportedFrameworks(),
                 Path = path,

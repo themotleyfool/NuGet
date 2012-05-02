@@ -42,9 +42,14 @@ namespace NuGet.Server.DataServices
             PackageHashAlgorithm = "SHA512";
             PackageSize = derivedData.PackageSize;
             LastUpdated = derivedData.LastUpdated.UtcDateTime;
-            Published = derivedData.Created.UtcDateTime;
+            Published = derivedData.Published.UtcDateTime;
+            Created = derivedData.Created.UtcDateTime;
             IsAbsoluteLatestVersion = package.IsAbsoluteLatestVersion;
             IsLatestVersion = package.IsLatestVersion;
+            IsPrerelease = derivedData.IsPrerelease;
+            Listed = package.Listed;
+            DownloadCount = package.DownloadCount;
+            VersionDownloadCount = package.VersionDownloadCount;
             Path = derivedData.Path;
             FullPath = derivedData.FullPath;
         }
@@ -133,6 +138,12 @@ namespace NuGet.Server.DataServices
             set;
         }
 
+        public DateTime Created
+        {
+            get;
+            set;
+        }
+
         public DateTime Published
         {
             get;
@@ -188,6 +199,12 @@ namespace NuGet.Server.DataServices
         }
 
         public bool IsLatestVersion
+        {
+            get;
+            set;
+        }
+
+        public bool IsPrerelease
         {
             get;
             set;
