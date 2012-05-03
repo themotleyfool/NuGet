@@ -17,7 +17,7 @@ namespace NuGet.Test.Server.Infrastructure
             string repositoryUrl = Helpers.GetRepositoryUrl(url, applicationPath);
 
             // Assert
-            Assert.Equal("http://example.com/nuget", repositoryUrl);
+            Assert.Equal("http://example.com/", repositoryUrl);
         }
 
         [Fact]
@@ -31,7 +31,7 @@ namespace NuGet.Test.Server.Infrastructure
             string repositoryUrl = Helpers.GetRepositoryUrl(url, applicationPath);
 
             // Assert
-            Assert.Equal("http://example.com/Foo/nuget", repositoryUrl);
+            Assert.Equal("http://example.com/Foo/", repositoryUrl);
         }
 
         [Fact]
@@ -45,7 +45,7 @@ namespace NuGet.Test.Server.Infrastructure
             string repositoryUrl = Helpers.GetRepositoryUrl(url, applicationPath);
 
             // Assert
-            Assert.Equal("http://example.com:1337/nuget", repositoryUrl);
+            Assert.Equal("http://example.com:1337/", repositoryUrl);
         }
 
         [Fact]
@@ -59,7 +59,7 @@ namespace NuGet.Test.Server.Infrastructure
             string repositoryUrl = Helpers.GetRepositoryUrl(url, applicationPath);
 
             // Assert
-            Assert.Equal("http://example.com:1337/Foo/nuget", repositoryUrl);
+            Assert.Equal("http://example.com:1337/Foo/", repositoryUrl);
         }
     }
 }

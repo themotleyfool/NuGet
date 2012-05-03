@@ -4,12 +4,12 @@ public static class Helpers
 {
     public static string GetRepositoryUrl(Uri currentUrl, string applicationPath)
     {
-        return GetBaseUrl(currentUrl, applicationPath) + "nuget";
+        return GetBaseUrl(currentUrl, applicationPath);
     }
 
     public static string GetPushUrl(Uri currentUrl, string applicationPath)
     {
-        return GetBaseUrl(currentUrl, applicationPath);
+        return GetRepositoryUrl(currentUrl, applicationPath);
     }
 
     public static string GetBaseUrl(Uri currentUrl, string applicationPath)

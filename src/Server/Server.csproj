@@ -91,6 +91,7 @@
     <Content Include="Default.aspx" />
     <Content Include="favicon.ico" />
     <Content Include="DataServices\Packages.svc" />
+    <Content Include="img\lucene-net-badge-180x36.png" />
     <Content Include="Packages\Readme.txt" />
     <Content Include="Web.config">
       <SubType>Designer</SubType>
