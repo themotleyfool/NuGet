@@ -36,7 +36,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         /// <summary>
         /// Combination of all searchable text fields for indexing.
         /// </summary>
-        [Field(Store = false)]
+        [Field(Store = StoreMode.No)]
         public string Text
         {
             get

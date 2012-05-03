@@ -25,8 +25,9 @@
     <Reference Include="Lucene.Net">
       <HintPath>..\..\packages\Lucene.Net.2.9.4.1\lib\net40\Lucene.Net.dll</HintPath>
     </Reference>
-    <Reference Include="Lucene.Net.Linq">
-      <HintPath>..\..\packages\Lucene.Net.Linq.1.0.17\lib\net40-Client\Lucene.Net.Linq.dll</HintPath>
+    <Reference Include="Lucene.Net.Linq, Version=1.0.18.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\packages\Lucene.Net.Linq.1.0.18\lib\net40-Client\Lucene.Net.Linq.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
