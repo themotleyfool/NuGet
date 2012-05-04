@@ -2,16 +2,19 @@
 
 namespace NuGet.Server
 {
-    internal class DefaultUrlRedirect
+    public class DefaultUrlRedirect
     {
+        public const string FeedLocation = "~/api/v2";
+        public const string WelcomeLocation = "~/Default.aspx";
+
         public void Redirect(RequestContext context)
         {
-            var location = "~/Default.aspx";
+            var location = WelcomeLocation;
 
             var userAgent = context.HttpContext.Request.UserAgent;
             if (userAgent == null || userAgent.ToLowerInvariant().Contains("nuget"))
             {
-                location = "~/api/v2";
+                location = FeedLocation;
             }
 
             context.HttpContext.Response.Redirect(location, true);
