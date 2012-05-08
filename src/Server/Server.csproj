@@ -57,10 +57,6 @@
     </Reference>
     <Reference Include="System.Web" />
     <Reference Include="System.Configuration" />
-    <Reference Include="WebActivator, Version=1.5.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\WebActivator.1.5\lib\net40\WebActivator.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\Common\CommonAssemblyInfo.cs">
@@ -92,6 +88,7 @@
     <Content Include="Default.aspx" />
     <Content Include="favicon.ico" />
     <Content Include="DataServices\Packages.svc" />
+    <Content Include="Global.asax" />
     <Content Include="img\lucene-net-badge-180x36.png" />
     <Content Include="Packages\Readme.txt" />
     <Content Include="Web.config">
@@ -105,9 +102,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DataServices\Routes.cs" />
     <None Include="Properties\NuGet.Server.nuspec" />
-    <Content Include="DataServices\Routes.cs.pp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.csproj">
