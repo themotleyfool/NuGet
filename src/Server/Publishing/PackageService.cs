@@ -86,6 +86,8 @@ namespace NuGet.Server
                 context.Response.AddHeader("content-disposition", String.Format("attachment; filename={0}", packageMetatada.Path));
                 context.Response.ContentType = "application/zip";
                 context.Response.TransmitFile(packageMetatada.FullPath);
+
+                _serverRepository.IncrementDownloadCount(requestedPackage);
             }
             else
             {

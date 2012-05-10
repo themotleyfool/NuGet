@@ -10,8 +10,10 @@ namespace NuGet.Server.Infrastructure
         public string PackageHash { get; set; }
         public DateTimeOffset LastUpdated { get; set; }
         public DateTimeOffset Created { get; set; }
+        public DateTimeOffset Published { get; set; }
         public string Path { get; set; }
         public string FullPath { get; set; }
         public IEnumerable<FrameworkName> SupportedFrameworks { get; set; }
+        public bool IsPrerelease { get; set; }
     }
 }

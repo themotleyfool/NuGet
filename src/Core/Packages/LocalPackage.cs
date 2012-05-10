@@ -79,6 +79,14 @@ namespace NuGet
             }
         }
 
+        public int VersionDownloadCount
+        {
+            get
+            {
+                return -1;
+            }
+        }
+
         public bool RequireLicenseAcceptance
         {
             get;
