@@ -36,7 +36,7 @@
     <fieldset>
         <legend>Search</legend>
         <asp:Image runat="server" ImageUrl="~/img/lucene-net-badge-180x36.png" AlternateText="Powered by Lucene.Net"/>
-		<form action="/api/v2/Search()" method="get" onsubmit="quoteQuery()">
+		<form action="<%= VirtualPathUtility.ToAbsolute("~/api/v2/Search()")%>" method="get" onsubmit="quoteQuery()">
             <select name="includePrerelease">
                 <option value="false">Stable Only</option>
                 <option value="true">Include Prerelease</option>
