@@ -34,7 +34,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             var analyzer = new PackageAnalyzer();
 
-            var create = !directory.GetDirectory().Exists;
+            var create = (!directory.GetDirectory().Exists) || !directory.GetDirectory().EnumerateFiles().Any();
 
             _writer = new IndexWriter(directory, analyzer, create, IndexWriter.MaxFieldLength.UNLIMITED);
 
