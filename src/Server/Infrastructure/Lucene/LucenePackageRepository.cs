@@ -8,6 +8,7 @@ using Lucene.Net.Linq;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using NuGet.Server.DataServices;
+using Directory = Lucene.Net.Store.Directory;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
@@ -27,55 +28,71 @@ namespace NuGet.Server.Infrastructure.Lucene
         }
 
         public LucenePackageRepository(string packagePath, string luceneIndexPath)
-            : base(new OneFolderPerPackageIdPathResolver(packagePath), new PhysicalFileSystem(packagePath))
+            : this(new OneFolderPerPackageIdPathResolver(packagePath), new PhysicalFileSystem(packagePath), OpenLuceneDirectory(luceneIndexPath))
         {
-            var directoryInfo = new DirectoryInfo(luceneIndexPath);
-            var directory = FSDirectory.Open(directoryInfo, new NativeFSLockFactory(directoryInfo));
+        }
 
+        public LucenePackageRepository(IPackagePathResolver packageResolver, IFileSystem fileSystem, Directory indexDirectory)
+            : base(packageResolver, fileSystem)
+        {
             var analyzer = new PackageAnalyzer();
 
-            var create = (!directory.GetDirectory().Exists) || !directory.GetDirectory().EnumerateFiles().Any();
+            var create = !indexDirectory.ListAll().Any();
+            _writer = new IndexWriter(indexDirectory, analyzer, create, IndexWriter.MaxFieldLength.UNLIMITED);
 
-            _writer = new IndexWriter(directory, analyzer, create, IndexWriter.MaxFieldLength.UNLIMITED);
-
-            _provider = new LuceneDataProvider(directory, analyzer, PackageAnalyzer.IndexVersion, _writer);
+            _provider = new LuceneDataProvider(indexDirectory, analyzer, PackageAnalyzer.IndexVersion, _writer);
         }
-        
+
+        private static Directory OpenLuceneDirectory(string luceneIndexPath)
+        {
+            var directoryInfo = new DirectoryInfo(luceneIndexPath);
+            return FSDirectory.Open(directoryInfo, new NativeFSLockFactory(directoryInfo));
+        }
+
         public override void AddPackage(IPackage package)
         {
             var contents = package.GetStream().ReadAllBytes();
 
+            AddPackage(package, contents);
+        }
+
+        public void AddPackage(IPackage package, byte[] contents)
+        {
             var lucenePackage = new LucenePackage(FileSystem, p => new MemoryStream(contents));
 
             Mapper.Map(package, lucenePackage);
 
             var currentPackages = (from p in LucenePackages
-                                where p.Id == lucenePackage.Id
-                                orderby p.Version descending
-                                select p).ToList();
+                                   where p.Id == lucenePackage.Id
+                                   orderby p.Version descending
+                                   select p).ToList();
 
             var newest = currentPackages.FirstOrDefault();
 
-            lucenePackage.Published = DateTimeOffset.UtcNow;
             lucenePackage.VersionDownloadCount = 0;
             lucenePackage.DownloadCount = newest != null ? newest.DownloadCount : 0;
-            
+
             currentPackages.RemoveAll(p => p.Version == lucenePackage.Version);
             currentPackages.Add(lucenePackage);
-            
+
             base.AddPackage(lucenePackage);
 
             lock (writeLock)
             {
-                AddPackageToIndex(lucenePackage, CalculateDerivedData);
+                using (var session = _provider.OpenSession<LucenePackage>())
+                {
+                    AddPackageToIndex(lucenePackage, CalculateDerivedData, session);
 
-                UpdatePackageVersionFlags(currentPackages.OrderByDescending(p => p.Version));
+                    session.Commit();
 
-                _writer.Commit();
+                    UpdatePackageVersionFlags(currentPackages.OrderByDescending(p => p.Version), session);
+
+                    session.Commit();
+                }
             }
         }
 
-        private void AddPackageToIndex(LucenePackage package, Func<IPackage, string, Stream, DerivedPackageData> getMetadata)
+        private void AddPackageToIndex(LucenePackage package, Func<IPackage, string, Stream, DerivedPackageData> getMetadata, ISession<LucenePackage> session)
         {
             var path = GetPackageFilePath(package);
 
@@ -84,15 +101,13 @@ namespace NuGet.Server.Infrastructure.Lucene
             // Map dervied data onto package
             Mapper.Map(derivedPackageData, package);
 
+            package.Published = DateTimeOffset.UtcNow;
+
             lock (writeLock)
             {
-                using (var session = _provider.OpenSession<LucenePackage>())
-                {
-                    // delete previous package from index, if present.
-                    session.Delete(new TermQuery(new Term("Path", path)));
-                    session.Add(package);
-                    session.Commit();
-                }
+                // delete previous package from index, if present.
+                session.Delete(new TermQuery(new Term("Path", path)));
+                session.Add(package);
             }
         }
 
@@ -106,47 +121,48 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             lock (writeLock)
             {
-                _writer.DeleteDocuments(new Term("Path", lucenePackage.Path));
+                using (var session = _provider.OpenSession<LucenePackage>())
+                {
+                    session.Delete(new TermQuery(new Term("Path", lucenePackage.Path)));
 
-                //TODO: verify this excludes just deleted package:
-                UpdatePackageVersionFlags(from p in LucenePackages where p.Id == package.Id orderby p.Version descending select p);
+                    session.Commit();
 
-                _writer.Commit();
+                    //TODO: verify this excludes just deleted package:
+                    var remainingPackages = from p in LucenePackages
+                                           where p.Id == package.Id
+                                           orderby p.Version descending
+                                           select p;
+
+                    UpdatePackageVersionFlags(remainingPackages, session);
+
+                    session.Commit();
+                }
             }
         }
 
-        private void UpdatePackageVersionFlags(IEnumerable<LucenePackage> packages)
+        private void UpdatePackageVersionFlags(IEnumerable<LucenePackage> packages, ISession<LucenePackage> session)
         {
-            using (var session = _provider.OpenSession<LucenePackage>())
+            var first = true;
+            foreach (var p in packages)
             {
-
-                var i = 0;
-                foreach (var p in packages)
+                if (first)
                 {
-                    if (i == 0)
+                    first = false;
+                    p.IsLatestVersion = true;
+                    p.IsAbsoluteLatestVersion = true;
+                }
+                else
+                {
+                    if (!p.IsLatestVersion && !p.IsAbsoluteLatestVersion)
                     {
-                        p.IsLatestVersion = true;
-                        p.IsAbsoluteLatestVersion = true;
-
-                        session.Delete(new TermQuery(new Term("Path", p.Path)));
-                        session.Add(p);
+                        continue;
                     }
-                    else
-                    {
-                        if (p.IsLatestVersion || p.IsAbsoluteLatestVersion)
-                        {
-                            p.IsLatestVersion = false;
-                            p.IsAbsoluteLatestVersion = false;
-
-                            session.Delete(new TermQuery(new Term("Path", p.Path)));
-                            session.Add(p);
-                        }
-                    }
-
-                    i++;
+                    p.IsLatestVersion = false;
+                    p.IsAbsoluteLatestVersion = false;
                 }
 
-                session.Commit();
+                session.Delete(new TermQuery(new Term("Path", p.Path)));
+                session.Add(p);
             }
         }
 
@@ -184,7 +200,6 @@ namespace NuGet.Server.Infrastructure.Lucene
         public override IPackage FindPackage(string packageId, SemanticVersion version)
         {
             var packages = LucenePackages;
-
             // TODO: version may be a range like {1.0.1} or (1.0,2.0]... how to do range query?
             var matches = (IEnumerable<IPackage>)(from p in packages where p.Id == packageId select p).ToArray();
             matches = matches.Where(p => p.Version == version);
@@ -217,7 +232,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             var packages = LucenePackages.ToList();
 
-            lock(writeLock)
+            lock (writeLock)
             {
                 using (var session = _provider.OpenSession<LucenePackage>())
                 {
@@ -249,9 +264,14 @@ namespace NuGet.Server.Infrastructure.Lucene
             return new Package(package, derived);
         }
 
-        private IQueryable<LucenePackage> LucenePackages
+        public IQueryable<LucenePackage> LucenePackages
         {
             get { return _provider.AsQueryable(() => new LucenePackage(FileSystem)); }
+        }
+
+        public LuceneDataProvider Provider
+        {
+            get { return _provider; }
         }
     }
 }
