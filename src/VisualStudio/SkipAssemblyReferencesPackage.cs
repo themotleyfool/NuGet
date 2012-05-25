@@ -149,5 +149,10 @@ namespace NuGet.VisualStudio
         {
             get { return _basePackage.DownloadCount; }
         }
+
+        public int VersionDownloadCount
+        {
+            get { return _basePackage.VersionDownloadCount; }
+        }
     }
 }

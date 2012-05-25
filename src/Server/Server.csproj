@@ -11,9 +11,23 @@
     <UseIISExpress>True</UseIISExpress>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="AutoMapper, Version=2.1.267.0, Culture=neutral, PublicKeyToken=be96cd2c38ef1005, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\packages\AutoMapper.2.1.267\lib\net40\AutoMapper.dll</HintPath>
+    </Reference>
     <Reference Include="Elmah, Version=1.2.14706.0, Culture=neutral, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\packages\elmah.corelibrary.1.2.2\lib\Elmah.dll</HintPath>
+    </Reference>
+    <Reference Include="ICSharpCode.SharpZipLib">
+      <HintPath>..\..\packages\SharpZipLib.0.86.0\lib\20\ICSharpCode.SharpZipLib.dll</HintPath>
+    </Reference>
+    <Reference Include="Lucene.Net">
+      <HintPath>..\..\packages\Lucene.Net.2.9.4.1\lib\net40\Lucene.Net.dll</HintPath>
+    </Reference>
+    <Reference Include="Lucene.Net.Linq, Version=1.0.26.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\packages\Lucene.Net.Linq.1.0.26\lib\net40-Client\Lucene.Net.Linq.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
@@ -23,6 +37,10 @@
     <Reference Include="Ninject, Version=3.0.0.0, Culture=neutral, PublicKeyToken=c7192dc5380945e7, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\packages\Ninject.3.0.0.15\lib\net40\Ninject.dll</HintPath>
+    </Reference>
+    <Reference Include="Remotion.Linq, Version=1.13.111.1, Culture=neutral, PublicKeyToken=fee00910d6e5f53b, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\packages\Remotion.Linq.1.13.111\lib\net35\Remotion.Linq.dll</HintPath>
     </Reference>
     <Reference Include="RouteMagic, Version=1.2.0.0, Culture=neutral, PublicKeyToken=84b59be021aa4cee, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
@@ -39,17 +57,22 @@
     </Reference>
     <Reference Include="System.Web" />
     <Reference Include="System.Configuration" />
-    <Reference Include="WebActivator, Version=1.5.0.0, Culture=neutral, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\WebActivator.1.5\lib\net40\WebActivator.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\Common\CommonAssemblyInfo.cs">
       <Link>Properties\CommonAssemblyInfo.cs</Link>
     </Compile>
+    <Compile Include="DataServices\DefaultUrlRedirect.cs" />
     <Compile Include="DataServices\Package.cs" />
     <Compile Include="DataServices\PackageContext.cs" />
+    <Compile Include="Infrastructure\Lucene\Mapping\BoolToIntConverter.cs" />
+    <Compile Include="Infrastructure\Lucene\Mapping\DateTimeOffsetToTicksConverter.cs" />
+    <Compile Include="Infrastructure\Lucene\Mapping\FrameworkNameConverter.cs" />
+    <Compile Include="Infrastructure\Lucene\LucenePackage.cs" />
+    <Compile Include="Infrastructure\Lucene\LucenePackageRepository.cs" />
+    <Compile Include="Infrastructure\Lucene\PackageAnalyzer.cs" />
+    <Compile Include="Infrastructure\Lucene\Mapping\PackageDependencyConverter.cs" />
+    <Compile Include="Infrastructure\OneFolderPerPackageIdPathResolver.cs" />
     <Compile Include="Publishing\PackageService.cs" />
     <Compile Include="Infrastructure\Bindings.cs" />
     <Compile Include="Infrastructure\Helpers.cs" />
@@ -69,6 +92,8 @@
     <Content Include="Default.aspx" />
     <Content Include="favicon.ico" />
     <Content Include="DataServices\Packages.svc" />
+    <Content Include="Global.asax" />
+    <Content Include="img\lucene-net-badge-180x36.png" />
     <Content Include="Packages\Readme.txt" />
     <Content Include="Web.config">
       <SubType>Designer</SubType>
@@ -81,9 +106,7 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DataServices\Routes.cs" />
     <None Include="Properties\NuGet.Server.nuspec" />
-    <Content Include="DataServices\Routes.cs.pp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.csproj">

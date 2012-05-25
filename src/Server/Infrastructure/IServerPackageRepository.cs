@@ -6,5 +6,6 @@ namespace NuGet.Server.Infrastructure
     {
         void RemovePackage(string packageId, SemanticVersion version);
         Package GetMetadataPackage(IPackage package);
+        void IncrementDownloadCount(IPackage package);
     }
 }

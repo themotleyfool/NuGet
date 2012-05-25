@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.ComponentModel;
 using System.Globalization;
+using System.Runtime.Versioning;
 
-namespace NuGet
+namespace NuGet.Server.Infrastructure.Lucene.Mapping
 {
-    public class SemanticVersionTypeConverter : TypeConverter
+    public class FrameworkNameConverter : TypeConverter
     {
         public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
         {
@@ -13,13 +14,7 @@ namespace NuGet
 
         public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
         {
-            var stringValue = value as string;
-            SemanticVersion semVer;
-            if (stringValue != null && SemanticVersion.TryParse(stringValue, out semVer))
-            {
-                return semVer;
-            }
-            return null;
+            return new FrameworkName((string) value);
         }
     }
 }

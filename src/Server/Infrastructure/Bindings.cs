@@ -1,4 +1,5 @@
 using Ninject.Modules;
+using NuGet.Server.Infrastructure.Lucene;
 
 namespace NuGet.Server.Infrastructure
 {
@@ -6,7 +7,7 @@ namespace NuGet.Server.Infrastructure
     {
         public override void Load()
         {
-            IServerPackageRepository packageRepository = new ServerPackageRepository(PackageUtility.PackagePhysicalPath);
+            IServerPackageRepository packageRepository = new LucenePackageRepository(PackageUtility.PackagePhysicalPath, PackageUtility.LuceneIndexPhysicalPath);
             Bind<IHashProvider>().To<CryptoHashProvider>();
             Bind<IServerPackageRepository>().ToConstant(packageRepository);
             Bind<PackageService>().ToSelf();
