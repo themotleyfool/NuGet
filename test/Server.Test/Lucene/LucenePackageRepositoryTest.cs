@@ -7,6 +7,7 @@ using Moq;
 using NuGet;
 using NuGet.Server.Infrastructure.Lucene;
 using Xunit;
+using LuceneDirectory = Lucene.Net.Store.Directory;
 
 namespace Server.Test.Lucene
 {
@@ -32,6 +33,33 @@ namespace Server.Test.Lucene
 
             provider = repository.Provider;
             datasource = repository.LucenePackages;
+        }
+
+        [Fact]
+        public void ShouldCreateDirectory_NoSuchDirectoryException()
+        {
+            var dir = new Mock<LuceneDirectory>();
+            dir.Setup(d => d.ListAll()).Throws(new NoSuchDirectoryException("no such!"));
+
+            Assert.True(LucenePackageRepository.ShouldCreateIndex(dir.Object), "ShouldCreateIndex");
+        }
+
+        [Fact]
+        public void ShouldCreateDirectory_Empty()
+        {
+            var dir = new Mock<LuceneDirectory>();
+            dir.Setup(d => d.ListAll()).Returns(new string[0]);
+
+            Assert.True(LucenePackageRepository.ShouldCreateIndex(dir.Object), "ShouldCreateIndex");
+        }
+
+        [Fact]
+        public void ShouldCreateDirectory_NotEmpty()
+        {
+            var dir = new Mock<LuceneDirectory>();
+            dir.Setup(d => d.ListAll()).Returns(new string[] {"I exist!"});
+
+            Assert.False(LucenePackageRepository.ShouldCreateIndex(dir.Object), "ShouldCreateIndex");
         }
 
         [Fact]

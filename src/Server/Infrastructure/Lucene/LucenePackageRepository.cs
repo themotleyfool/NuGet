@@ -8,7 +8,7 @@ using Lucene.Net.Linq;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using NuGet.Server.DataServices;
-using Directory = Lucene.Net.Store.Directory;
+using LuceneDirectory = Lucene.Net.Store.Directory;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
@@ -32,18 +32,35 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
         }
 
-        public LucenePackageRepository(IPackagePathResolver packageResolver, IFileSystem fileSystem, Directory indexDirectory)
+        public LucenePackageRepository(IPackagePathResolver packageResolver, IFileSystem fileSystem, LuceneDirectory indexDirectory)
             : base(packageResolver, fileSystem)
         {
             var analyzer = new PackageAnalyzer();
 
-            var create = !indexDirectory.ListAll().Any();
+            var create = ShouldCreateIndex(indexDirectory);
+
             _writer = new IndexWriter(indexDirectory, analyzer, create, IndexWriter.MaxFieldLength.UNLIMITED);
 
             _provider = new LuceneDataProvider(indexDirectory, analyzer, PackageAnalyzer.IndexVersion, _writer);
         }
 
-        private static Directory OpenLuceneDirectory(string luceneIndexPath)
+        public static bool ShouldCreateIndex(LuceneDirectory dir)
+        {
+            var create = false;
+
+            try
+            {
+                create = !dir.ListAll().Any();
+            }
+            catch (NoSuchDirectoryException)
+            {
+                create = true;
+            }
+
+            return create;
+        }
+
+        private static LuceneDirectory OpenLuceneDirectory(string luceneIndexPath)
         {
             var directoryInfo = new DirectoryInfo(luceneIndexPath);
             return FSDirectory.Open(directoryInfo, new NativeFSLockFactory(directoryInfo));
