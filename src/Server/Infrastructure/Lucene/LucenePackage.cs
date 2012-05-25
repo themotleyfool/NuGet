@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
 using Lucene.Net.Linq.Mapping;
+using NuGet.Server.Infrastructure.Lucene.Mapping;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
@@ -33,21 +32,8 @@ namespace NuGet.Server.Infrastructure.Lucene
             Dependencies = Enumerable.Empty<PackageDependency>();
         }
 
-        /// <summary>
-        /// Combination of all searchable text fields for indexing.
-        /// </summary>
-        [Field(Store = StoreMode.No)]
-        public string Text
-        {
-            get
-            {
-                var fields = new List<string> { Id, Title, Description, Summary, ReleaseNotes, Tags };
-                fields.AddRange(Authors);
-                fields.AddRange(Owners);
-
-                return string.Join(" ", fields.Where(f => !string.IsNullOrEmpty(f)));
-            }
-        }
+        [QueryScore]
+        public float Score { get; set; }
 
         #region IPackage
 
@@ -55,7 +41,6 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public SemanticVersion Version { get; set; }
 
-        [Field(IndexMode.NotIndexed)]
         public string Title { get; set; }
 
         [Field(IndexMode.NotIndexed)]
@@ -73,18 +58,15 @@ namespace NuGet.Server.Infrastructure.Lucene
         [NumericField(Converter = typeof(BoolToIntConverter))]
         public bool RequireLicenseAcceptance { get; set; }
 
-        [Field(IndexMode.NotIndexed)]
         public string Description { get; set; }
 
-        [Field(IndexMode.NotIndexed)]
         public string Summary { get; set; }
 
-        [Field(IndexMode.NotIndexed)]
         public string ReleaseNotes { get; set; }
 
+        [Field(IndexMode.NotIndexed)]
         public string Language { get; set; }
 
-        [Field(IndexMode.NotIndexed)]
         public string Tags { get; set; }
 
         [Field(IndexMode.NotIndexed)]
@@ -114,10 +96,8 @@ namespace NuGet.Server.Infrastructure.Lucene
         [NumericField(Converter = typeof(DateTimeOffsetToTicksConverter))]
         public DateTimeOffset? Published { get; set; }
 
-        [Field(IndexMode.NotIndexed)]
         public IEnumerable<string> Authors { get; set; }
 
-        [Field(IndexMode.NotIndexed)]
         public IEnumerable<string> Owners { get; set; }
 
         [Field(IndexMode.NotIndexed, Converter = typeof(PackageDependencyConverter))]
@@ -171,88 +151,5 @@ namespace NuGet.Server.Infrastructure.Lucene
         }
 
         #endregion
-    }
-
-    public class DateTimeOffsetToTicksConverter : TypeConverter
-    {
-        public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
-        {
-            return sourceType == typeof(long);
-        }
-
-        public override bool CanConvertTo(ITypeDescriptorContext context, Type destinationType)
-        {
-            return destinationType == typeof(long);
-        }
-
-        public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
-        {
-            return new DateTimeOffset((long)value, TimeSpan.Zero);
-        }
-
-        public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
-        {
-            if (value is DateTime)
-                return ((DateTime) value).ToUniversalTime().Ticks;
-
-            return ((DateTimeOffset)value).Ticks;
-        }
-    }
-
-    public class BoolToIntConverter : TypeConverter
-    {
-        public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
-        {
-            return sourceType == typeof(int);
-        }
-
-        public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
-        {
-            return 1 == (int) value ? true : false;
-        }
-
-        public override bool CanConvertTo(ITypeDescriptorContext context, Type destinationType)
-        {
-            return destinationType == typeof (int);
-        }
-
-        public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
-        {
-            return ((bool) value) ? 1 : 0;
-        }
-    }
-
-    public class FrameworkNameConverter : TypeConverter
-    {
-        public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
-        {
-            return sourceType == typeof(string);
-        }
-
-        public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
-        {
-            return new FrameworkName((string) value);
-        }
-    }
-
-    public class PackageDependencyConverter : TypeConverter
-    {
-        public override bool CanConvertFrom(ITypeDescriptorContext context, Type sourceType)
-        {
-            return sourceType == typeof (string);
-        }
-
-        public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
-        {
-            var parts = ((string)value).Split(new[] { ':' }, 2);
-
-            return new PackageDependency(parts[0], VersionUtility.ParseVersionSpec(parts[1]));
-        }
-
-        public override object ConvertTo(ITypeDescriptorContext context, CultureInfo culture, object value, Type destinationType)
-        {
-            var d = (PackageDependency) value;
-            return string.Format("{0}:{1}", d.Id, d.VersionSpec);
-        }
     }
 }

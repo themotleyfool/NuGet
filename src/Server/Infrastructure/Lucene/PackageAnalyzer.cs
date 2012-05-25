@@ -11,7 +11,16 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public PackageAnalyzer() : base(new LowercaseKeywordAnalyzer())
         {
-            base.AddAnalyzer("Text", new PorterStemAnalyzer(IndexVersion));
+            var porterStemAnalyzer = new PorterStemAnalyzer(IndexVersion);
+            var standardAnalyzer = new StandardAnalyzer(IndexVersion);
+
+            base.AddAnalyzer("Description", porterStemAnalyzer);
+            base.AddAnalyzer("ReleaseNotes", porterStemAnalyzer);
+            base.AddAnalyzer("Summary", porterStemAnalyzer);
+            base.AddAnalyzer("Tags", porterStemAnalyzer);
+            
+            base.AddAnalyzer("Authors", standardAnalyzer);
+            base.AddAnalyzer("Owners", standardAnalyzer);
         }
 
         class PorterStemAnalyzer : StandardAnalyzer

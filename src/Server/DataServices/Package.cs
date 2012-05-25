@@ -19,6 +19,7 @@ namespace NuGet.Server.DataServices
             Version = package.Version.ToString();
             Title = package.Title;
             Authors = String.Join(",", package.Authors);
+            Owners = String.Join(",", package.Owners);
             if (package.IconUrl != null)
             {
                 IconUrl = package.IconUrl.GetComponents(UriComponents.HttpRequestUrl, UriFormat.Unescaped);
@@ -85,6 +86,12 @@ namespace NuGet.Server.DataServices
         }
 
         public string Authors
+        {
+            get;
+            set;
+        }
+
+        public string Owners
         {
             get;
             set;
@@ -217,6 +224,12 @@ namespace NuGet.Server.DataServices
         }
 
         public int VersionDownloadCount
+        {
+            get;
+            set;
+        }
+
+        public float Score
         {
             get;
             set;

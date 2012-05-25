@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data.Services.Client;
 using System.IO;
 using System.Linq;
 using AutoMapper;
@@ -230,11 +231,28 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public override IQueryable<IPackage> Search(string searchTerm, IEnumerable<string> targetFrameworks, bool allowPrereleaseVersions)
         {
-            var packages = LucenePackages;
+            var packages = LucenePackages.Where(p => p.IsLatestVersion);
+
+            if (!packages.Any())
+            {
+                return new IPackage[0].AsQueryable();
+            }
+
+            var maxDownload = LucenePackages.Max(p => p.DownloadCount);
 
             if (!string.IsNullOrEmpty(searchTerm))
             {
-                packages = packages.Where(p => p.Text == searchTerm);
+                packages = from
+                                pkg in packages
+                           where
+                                (pkg.Id == searchTerm).Boost(5) ||
+                                (pkg.Title == searchTerm).Boost(3) ||
+                                (pkg.Tags == searchTerm).Boost(2) ||
+                                (pkg.Authors.Contains(searchTerm) || pkg.Owners.Contains(searchTerm)).Boost(2) ||
+                                (pkg.Summary == searchTerm) ||
+                                (pkg.Description == searchTerm)
+                           select
+                               pkg;
             }
 
             if (!allowPrereleaseVersions)
@@ -242,7 +260,7 @@ namespace NuGet.Server.Infrastructure.Lucene
                 packages = packages.Where(p => !p.IsPrerelease);
             }
 
-            return packages.OrderBy(p => p.Score());
+            return packages.OrderBy(p => p.Score()).Boost(p => (float) (p.DownloadCount + 1) / (maxDownload + 1) * 4);
         }
 
         public void ReIndex()
@@ -278,7 +296,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             var derived = Mapper.Map<LucenePackage, DerivedPackageData>(lucenePackage);
 
-            return new Package(package, derived);
+            return new Package(package, derived) { Score = lucenePackage.Score };
         }
 
         public IQueryable<LucenePackage> LucenePackages
