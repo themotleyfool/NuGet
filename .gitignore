@@ -13,9 +13,11 @@ App_Data
 *.vsp
 *.psess
 *.docstates
+*.dotCover
 TestResults
 [Tt]humbs.db
-src/Server/Packages/*.nupkg
+src/Server/Lucene/
+src/Server/Packages/
 src/Server/Server.Publish.xml
 DebugConstants.cs
 *.log
