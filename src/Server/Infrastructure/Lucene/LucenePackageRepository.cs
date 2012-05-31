@@ -13,7 +13,7 @@ using LuceneDirectory = Lucene.Net.Store.Directory;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
-    public class LucenePackageRepository : ServerPackageRepository
+    public class LucenePackageRepository : ServerPackageRepository, IDisposable
     {
         private readonly LuceneDataProvider _provider;
         private readonly IndexWriter _writer;
@@ -65,6 +65,11 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             var directoryInfo = new DirectoryInfo(luceneIndexPath);
             return FSDirectory.Open(directoryInfo, new NativeFSLockFactory(directoryInfo));
+        }
+
+        public void Dispose()
+        {
+            _writer.Dispose();
         }
 
         public override void AddPackage(IPackage package)

@@ -14,6 +14,11 @@
         MapRoutes(RouteTable.Routes);
     }
 
+    protected void Application_End(object sender, EventArgs e)
+    {
+        NinjectBootstrapper.Kernel.Dispose();
+    }
+    
     private static void MapRoutes(RouteCollection routes)
     {
         routes.MapDelegate("Redirect-Root",
