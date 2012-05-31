@@ -65,6 +65,7 @@
     <Compile Include="DataServices\DefaultUrlRedirect.cs" />
     <Compile Include="DataServices\Package.cs" />
     <Compile Include="DataServices\PackageContext.cs" />
+    <Compile Include="Infrastructure\Lucene\IndexDifferences.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\BoolToIntConverter.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\DateTimeOffsetToTicksConverter.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\FrameworkNameConverter.cs" />

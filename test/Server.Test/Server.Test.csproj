@@ -48,6 +48,7 @@
   <ItemGroup>
     <Compile Include="DefaultUrlRedirectTest.cs" />
     <Compile Include="FeedPackageTest.cs" />
+    <Compile Include="Lucene\IndexDifferencesTests.cs" />
     <Compile Include="Lucene\LucenePackageRepositoryTest.cs" />
     <Compile Include="Lucene\PackageDependencyConverterTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
