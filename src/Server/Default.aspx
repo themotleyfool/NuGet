@@ -1,4 +1,5 @@
-﻿<%@ Page Language="C#" %>
+﻿<%@ Page Language="C#" Inherits="NuGet.Server.WebFormsPage" %>
+<%@ Import Namespace="System.Web.Mvc.Html" %>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -36,7 +37,7 @@
     <fieldset>
         <legend>Search</legend>
         <asp:Image runat="server" ImageUrl="~/img/lucene-net-badge-180x36.png" AlternateText="Powered by Lucene.Net"/>
-		<form action="<%= VirtualPathUtility.ToAbsolute("~/search")%>" method="get">
+		<form action="<%= Url.Action("Search", "Search") %>" method="get">
             <select name="includePrerelease">
                 <option value="false">Stable Only</option>
                 <option value="true">Include Prerelease</option>
@@ -47,6 +48,16 @@
 
 			<input type="submit" value="Search"/>
 		</form>
+    </fieldset>
+    
+    <fieldset>
+        <legend>Lucene Index Info</legend>
+        
+        <%= Html.Action("Status", "Admin") %>
+
+        <form action="<%= Url.Action("Synchronize", "Admin") %>" method="post">
+            <input type="submit" value="Rebuild Index"/>
+        </form>
     </fieldset>
 </body>
 </html>

@@ -66,6 +66,9 @@
         routes.MapRoute("Search", "search/{action}",
            new { controller = "Search", action = "Search" });
 
+        routes.MapRoute("Admin", "indexer/{action}",
+           new { controller = "Admin" });
+        
         // The default route is http://{root}/api/v2
         var factory = new System.Data.Services.DataServiceHostFactory();
         var serviceRoute = new ServiceRoute("api/v2", factory, typeof(Packages));
