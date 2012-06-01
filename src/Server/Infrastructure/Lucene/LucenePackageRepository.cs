@@ -265,7 +265,9 @@ namespace NuGet.Server.Infrastructure.Lucene
                 packages = packages.Where(p => !p.IsPrerelease);
             }
 
-            return packages.OrderBy(p => p.Score()).Boost(p => (float) (p.DownloadCount + 1) / (maxDownload + 1) * 4);
+            packages = packages.OrderBy(p => p.Score()).Boost(p => ((float)(p.DownloadCount + 1) / (maxDownload + 1)) * 2);
+
+            return packages.Select(p => (IPackage)p);
         }
 
         public void ReIndex()

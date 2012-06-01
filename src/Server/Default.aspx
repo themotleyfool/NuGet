@@ -36,26 +36,17 @@
     <fieldset>
         <legend>Search</legend>
         <asp:Image runat="server" ImageUrl="~/img/lucene-net-badge-180x36.png" AlternateText="Powered by Lucene.Net"/>
-		<form action="<%= VirtualPathUtility.ToAbsolute("~/api/v2/Search()")%>" method="get" onsubmit="quoteQuery()">
+		<form action="<%= VirtualPathUtility.ToAbsolute("~/search")%>" method="get">
             <select name="includePrerelease">
                 <option value="false">Stable Only</option>
                 <option value="true">Include Prerelease</option>
             </select>
 
-			<input type="text" id="query" value=""/>
-			
-			<input type="hidden" name="targetFramework" value="''"/>
-			<input type="hidden" name="searchTerm" id="searchTerm"/>
+			<input type="text" name="query" value=""/>
+			<input type="hidden" name="pageSize" value="10"/>
+
 			<input type="submit" value="Search"/>
 		</form>
     </fieldset>
-    <script>
-        function quoteQuery() {
-            // odata requires strings to be quoted.
-            var term = document.getElementById("searchTerm");
-            var query = document.getElementById("query");
-            term.value = "'" + query.value + "'";
-        }
-    </script>
 </body>
 </html>

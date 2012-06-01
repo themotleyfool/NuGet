@@ -1,5 +1,6 @@
-﻿<%@ Application Inherits="System.Web.HttpApplication" Language="C#" %>
+﻿<%@ Application Inherits="Ninject.Web.Common.NinjectHttpApplication" Language="C#" %>
 <%@ Import Namespace="System.ServiceModel.Activation" %>
+<%@ Import Namespace="System.Web.Mvc" %>
 <%@ Import Namespace="System.Web.Routing" %>
 <%@ Import Namespace="Ninject" %>
 <%@ Import Namespace="NuGet.Server" %>
@@ -9,14 +10,15 @@
 
 <script runat="server">
     
-    protected void Application_Start(object sender, EventArgs e)
+    protected override void OnApplicationStarted()
     {
-        MapRoutes(RouteTable.Routes);
+       base.OnApplicationStarted();
+       MapRoutes(RouteTable.Routes);
     }
 
-    protected void Application_End(object sender, EventArgs e)
+    protected override IKernel CreateKernel()
     {
-        NinjectBootstrapper.Kernel.Dispose();
+        return NinjectBootstrapper.Kernel;
     }
     
     private static void MapRoutes(RouteCollection routes)
@@ -60,6 +62,9 @@
                            "api/v2/package/{packageId}/{version}",
                            new { httpMethod = new HttpMethodConstraint("GET") },
                            context => CreatePackageService().DownloadPackage(context.HttpContext));
+
+        routes.MapRoute("Search", "search/{action}",
+           new { controller = "Search", action = "Search" });
 
         // The default route is http://{root}/api/v2
         var factory = new System.Data.Services.DataServiceHostFactory();

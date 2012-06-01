@@ -23,6 +23,9 @@
     <Reference Include="Moq">
       <HintPath>..\..\packages\Moq.4.0.10827\lib\NET40\Moq.dll</HintPath>
     </Reference>
+    <Reference Include="Ninject, Version=3.0.0.0, Culture=neutral, PublicKeyToken=c7192dc5380945e7, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\Ninject.3.0.1.10\lib\net40\Ninject.dll</HintPath>
+    </Reference>
     <Reference Include="Remotion.Linq, Version=1.13.111.1, Culture=neutral, PublicKeyToken=fee00910d6e5f53b, processorArchitecture=MSIL">
       <HintPath>..\..\packages\Remotion.Linq.1.13.111\lib\net35\Remotion.Linq.dll</HintPath>
     </Reference>
@@ -31,6 +34,7 @@
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Web" />
+    <Reference Include="System.Web.Mvc, Version=3.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL" />
     <Reference Include="xunit, Version=1.9.0.1566, Culture=neutral, PublicKeyToken=8d05b1bb7a6fdb6c, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\packages\xunit.1.9.0.1566\lib\xunit.dll</HintPath>
@@ -46,6 +50,7 @@
     </CodeAnalysisDependentAssemblyPaths>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Controllers\SearchControllerTests.cs" />
     <Compile Include="DefaultUrlRedirectTest.cs" />
     <Compile Include="FeedPackageTest.cs" />
     <Compile Include="Lucene\IndexDifferencesTests.cs" />

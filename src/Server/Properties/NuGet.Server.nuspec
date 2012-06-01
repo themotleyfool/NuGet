@@ -12,6 +12,11 @@
           <frameworkAssembly assemblyName="System.ServiceModel.Web" />
           <frameworkAssembly assemblyName="System.ServiceModel.Activation" />
           <frameworkAssembly assemblyName="System.Data.Services" />
+          <frameworkAssembly assemblyName="System.Web.Helpers" />
+          <frameworkAssembly assemblyName="System.Web.Mvc" />
+          <frameworkAssembly assemblyName="System.Web.Razor" />
+          <frameworkAssembly assemblyName="System.Web.WebPages.Razor" />
+          <frameworkAssembly assemblyName="System.Xml" />
         </frameworkAssemblies>
         <dependencies>
             <dependency id="NuGet.Core" version="1.8.1" />
