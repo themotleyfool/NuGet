@@ -1,59 +1,39 @@
-using System;
-using System.Linq;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
     public class IndexDifferences
     {
-        private readonly IFileSystem fileSystem;
-        private readonly string[] fileSystemPackages;
-        private readonly Dictionary<string, LucenePackage> indexedPackagesByPath;
+        private readonly IEnumerable<string> newPackages;
+        private readonly IEnumerable<string> missingPackages;
+        private readonly IEnumerable<string> modifiedPackages;
 
-        public IEnumerable<string> MissingPackages { get; private set; }
-        public IEnumerable<string> NewPackages { get; private set; }
-        public IEnumerable<string> ModifiedPackages { get; private set; }
-
-        private IndexDifferences(IFileSystem fileSystem, string[] fileSystemPackages, Dictionary<string, LucenePackage> indexedPackagesByPath)
+        public IndexDifferences(IEnumerable<string> newPackages, IEnumerable<string> missingPackages, IEnumerable<string> modifiedPackages)
         {
-            this.fileSystem = fileSystem;
-            this.fileSystemPackages = fileSystemPackages;
-            this.indexedPackagesByPath = indexedPackagesByPath;
-            MissingPackages = new string[0];
-            NewPackages = new string[0];
-            ModifiedPackages = new string[0];
+            this.newPackages = newPackages ?? new string[0];
+            this.missingPackages = missingPackages ?? new string[0];
+            this.modifiedPackages = modifiedPackages ?? new string[0];
         }
 
-        public static IndexDifferences FindDifferences(IFileSystem fileSystem, IEnumerable<LucenePackage> indexedPackages)
+        public IEnumerable<string> NewPackages
         {
-            var fileSystemPackages = fileSystem.GetFiles(string.Empty, "*" + Constants.PackageExtension, true).ToArray();
-            var indexedPackagesByPath = indexedPackages.ToDictionary(pkg => pkg.Path);
-
-            var diff = new IndexDifferences(fileSystem, fileSystemPackages, indexedPackagesByPath);
-
-            diff.Calculate();
-
-            return diff;
+            get { return newPackages; }
         }
 
-        private void Calculate()
+        public IEnumerable<string> MissingPackages
         {
-            NewPackages = Enumerable.Except(fileSystemPackages, indexedPackagesByPath.Keys);
-            MissingPackages = Enumerable.Except(indexedPackagesByPath.Keys, fileSystemPackages);
-            ModifiedPackages = fileSystemPackages.Intersect(indexedPackagesByPath.Keys).Where(ModifiedDateMismatch);
+            get { return missingPackages; }
         }
 
-        private bool ModifiedDateMismatch(string path)
+        public IEnumerable<string> ModifiedPackages
         {
-            var lucenePackage = indexedPackagesByPath[path];
+            get { return modifiedPackages; }
+        }
 
-            if (!lucenePackage.Published.HasValue)
-            {
-                return true;
-            }
-
-            var diff = fileSystem.GetLastModified(path) - lucenePackage.Published.Value;
-            return Math.Abs(diff.TotalSeconds) > 1;
+        public bool IsEmpty
+        {
+            get { return NewPackages.Union(MissingPackages).Union(ModifiedPackages).IsEmpty(); }
         }
     }
 }

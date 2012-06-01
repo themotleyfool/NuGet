@@ -79,7 +79,11 @@
     <Compile Include="DataServices\DefaultUrlRedirect.cs" />
     <Compile Include="DataServices\Package.cs" />
     <Compile Include="DataServices\PackageContext.cs" />
+    <Compile Include="Infrastructure\Lucene\ILucenePackageLoader.cs" />
+    <Compile Include="Infrastructure\Lucene\IndexDifferenceCalculator.cs" />
     <Compile Include="Infrastructure\Lucene\IndexDifferences.cs" />
+    <Compile Include="Infrastructure\Lucene\IndexingStatus.cs" />
+    <Compile Include="Infrastructure\Lucene\IPackageIndexer.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\BoolToIntConverter.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\DateTimeOffsetToTicksConverter.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\FrameworkNameConverter.cs" />
@@ -87,6 +91,7 @@
     <Compile Include="Infrastructure\Lucene\LucenePackageRepository.cs" />
     <Compile Include="Infrastructure\Lucene\PackageAnalyzer.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\PackageDependencyConverter.cs" />
+    <Compile Include="Infrastructure\Lucene\PackageIndexer.cs" />
     <Compile Include="Infrastructure\OneFolderPerPackageIdPathResolver.cs" />
     <Compile Include="Models\SearchForm.cs" />
     <Compile Include="Publishing\PackageService.cs" />

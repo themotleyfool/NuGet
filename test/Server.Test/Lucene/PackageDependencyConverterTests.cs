@@ -1,5 +1,4 @@
 using NuGet;
-using NuGet.Server.Infrastructure.Lucene;
 using NuGet.Server.Infrastructure.Lucene.Mapping;
 using Xunit;
 

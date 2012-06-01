@@ -113,7 +113,7 @@ namespace NuGet.Server.Infrastructure
 
         protected virtual DerivedPackageData CalculateDerivedData(IPackage package, string path, Stream stream)
         {
-            byte[] fileBytes = stream.ReadAllBytes();
+            byte[] fileBytes = stream.ReadAllBytesAndDispose();
 
             return new DerivedPackageData
             {

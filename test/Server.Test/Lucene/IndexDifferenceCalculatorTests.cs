@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using Moq;
 using NuGet;
@@ -9,12 +8,12 @@ using Xunit;
 
 namespace Server.Test.Lucene
 {
-    public class IndexDifferencesTests
+    public class IndexDifferenceCalculatorTests
     {
         private readonly Mock<IFileSystem> fileSystem;
         private static readonly DateTimeOffset SamplePublishedDate = new DateTimeOffset(2012, 5, 29, 13, 42, 23, TimeSpan.Zero);
 
-        public IndexDifferencesTests()
+        public IndexDifferenceCalculatorTests()
         {
             fileSystem = new Mock<IFileSystem>();
         }
@@ -25,7 +24,7 @@ namespace Server.Test.Lucene
             SetupFileSystemPackagePaths();
             var indexedPackages = CreateLucenePackages();
 
-            var diff = IndexDifferences.FindDifferences(fileSystem.Object, indexedPackages);
+            var diff = IndexDifferenceCalculator.FindDifferences(fileSystem.Object, indexedPackages);
 
             Assert.Equal(0, diff.MissingPackages.Count());
         }
@@ -36,7 +35,7 @@ namespace Server.Test.Lucene
             SetupFileSystemPackagePaths();
             var indexedPackages = CreateLucenePackages();
 
-            var diff = IndexDifferences.FindDifferences(fileSystem.Object, indexedPackages);
+            var diff = IndexDifferenceCalculator.FindDifferences(fileSystem.Object, indexedPackages);
 
             Assert.Equal(0, diff.NewPackages.Count());
         }
@@ -47,7 +46,7 @@ namespace Server.Test.Lucene
             SetupFileSystemPackagePaths();
             var indexedPackages = CreateLucenePackages();
 
-            var diff = IndexDifferences.FindDifferences(fileSystem.Object, indexedPackages);
+            var diff = IndexDifferenceCalculator.FindDifferences(fileSystem.Object, indexedPackages);
 
             Assert.Equal(0, diff.ModifiedPackages.Count());
         }
@@ -58,7 +57,7 @@ namespace Server.Test.Lucene
             SetupFileSystemPackagePaths("a", "b");
             var indexedPackages = CreateLucenePackages("a");
 
-            var diff = IndexDifferences.FindDifferences(fileSystem.Object, indexedPackages);
+            var diff = IndexDifferenceCalculator.FindDifferences(fileSystem.Object, indexedPackages);
 
             Assert.Equal(new[] {"b"}, diff.NewPackages);
         }
@@ -69,7 +68,7 @@ namespace Server.Test.Lucene
             SetupFileSystemPackagePaths("b", "c");
             var indexedPackages = CreateLucenePackages("a", "b");
 
-            var diff = IndexDifferences.FindDifferences(fileSystem.Object, indexedPackages);
+            var diff = IndexDifferenceCalculator.FindDifferences(fileSystem.Object, indexedPackages);
 
             Assert.Equal(new[] { "a" }, diff.MissingPackages);
         }
@@ -80,7 +79,7 @@ namespace Server.Test.Lucene
             SetupFileSystemPackagePaths("a", "b");
             var indexedPackages = CreateLucenePackages("a", "b").ToList();
             indexedPackages[0].Published = SamplePublishedDate;
-            var diff = IndexDifferences.FindDifferences(fileSystem.Object, indexedPackages);
+            var diff = IndexDifferenceCalculator.FindDifferences(fileSystem.Object, indexedPackages);
 
             Assert.Equal(new[] { "b" }, diff.ModifiedPackages);
         }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Web.Mvc;
 using Moq;
+using NuGet;
 using NuGet.Server.Controllers;
 using NuGet.Server.Infrastructure;
 using NuGet.Server.Infrastructure.Lucene;
@@ -168,7 +169,7 @@ namespace Server.Test.Controllers
 
             var result = (SearchResultsViewModel)controller.Search(searchForm).Model;
 
-            Assert.IsAssignableFrom<IList<LucenePackage>>(result.Hits);
+            Assert.IsAssignableFrom<IList<IPackage>>(result.Hits);
 
             repository.VerifyAll();
         }
