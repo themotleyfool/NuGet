@@ -121,6 +121,9 @@
     <Content Include="Global.asax" />
     <Content Include="img\lucene-net-badge-180x36.png" />
     <Content Include="Packages\Readme.txt" />
+    <Content Include="Scripts\jquery-1.7.2-vsdoc.js" />
+    <Content Include="Scripts\jquery-1.7.2.js" />
+    <Content Include="Scripts\jquery-1.7.2.min.js" />
     <Content Include="Web.config">
       <SubType>Designer</SubType>
     </Content>

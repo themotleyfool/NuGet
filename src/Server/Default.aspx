@@ -53,11 +53,26 @@
     <fieldset>
         <legend>Lucene Index Info</legend>
         
+        <div id="status">
         <%= Html.Action("Status", "Admin") %>
+        </div>
 
         <form action="<%= Url.Action("Synchronize", "Admin") %>" method="post">
             <input type="submit" value="Rebuild Index"/>
         </form>
     </fieldset>
+    
+    <script src="<%= VirtualPathUtility.ToAbsolute("~/Scripts/jquery-1.7.2.min.js") %>"></script>
+    <script>
+        $(document).ready(function updateStatus() {
+            $.ajax({
+                url: '<%= Url.Action("Status", "Admin") %>',
+                success: function (result) {
+                    $("#status").html(result);
+                    setTimeout(updateStatus, 5000);
+                }
+            });
+        });
+    </script>
 </body>
 </html>
