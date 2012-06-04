@@ -15,7 +15,7 @@ namespace NuGet.Server.Controllers
 
         public ViewResult Search(SearchForm form)
         {
-            var queryable = Repository.Search(form.Query, new string[0], form.IncludePrerelease);
+            var queryable = Repository.Search(form.Query, new string[0], form.IncludePrerelease).Where(p => p.IsLatestVersion);
             var totalHits = queryable.Count();
             var first = form.Page*form.PageSize;
             var hits = queryable.Skip(first).Take(form.PageSize).ToList();

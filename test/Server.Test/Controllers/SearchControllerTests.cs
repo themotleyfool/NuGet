@@ -176,7 +176,7 @@ namespace Server.Test.Controllers
 
         private void SetupRepositorySearch(SearchForm searchForm, int numResultsToReturn)
         {
-            var results = Enumerable.Range(0, numResultsToReturn).Select((p, i) => new LucenePackage(null, null) { Id = i.ToString() }).ToList();
+            var results = Enumerable.Range(0, numResultsToReturn).Select((p, i) => new LucenePackage(null, null) { Id = i.ToString(), IsLatestVersion = true}).ToList();
             
             repository.Setup(repo => repo.Search(searchForm.Query, new string[0], searchForm.IncludePrerelease))
                 .Returns(results.AsQueryable()).Verifiable();
