@@ -84,6 +84,18 @@ namespace Server.Test.Lucene
             Assert.Equal(new[] { "b" }, diff.ModifiedPackages);
         }
 
+        [Fact]
+        public void CaseInsensitive()
+        {
+            SetupFileSystemPackagePaths("a");
+            var indexedPackages = CreateLucenePackages("A").ToList();
+            indexedPackages[0].Published = SamplePublishedDate;
+            var diff = IndexDifferenceCalculator.FindDifferences(fileSystem.Object, indexedPackages);
+
+            Assert.Empty(diff.NewPackages);
+            Assert.Empty(diff.ModifiedPackages);
+        }
+
         private IEnumerable<LucenePackage> CreateLucenePackages(params string[] paths)
         {
             foreach (var p in paths)

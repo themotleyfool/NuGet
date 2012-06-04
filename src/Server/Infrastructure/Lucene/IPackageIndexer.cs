@@ -9,7 +9,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         /// </summary>
         IndexingStatus GetIndexingStatus();
 
-        IAsyncResult BeginSynchronizeIndexWithFileSystem(AsyncCallback callback, object state);
+        IAsyncResult BeginSynchronizeIndexWithFileSystem(AsyncCallback callback, object clientState);
         void EndSynchronizeIndexWithFileSystem(IAsyncResult ar);
         void SynchronizeIndexWithFileSystem();
         void AddPackage(LucenePackage package);

@@ -20,7 +20,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         public static IndexDifferences FindDifferences(IFileSystem fileSystem, IEnumerable<LucenePackage> indexedPackages)
         {
             var fileSystemPackages = fileSystem.GetFiles(string.Empty, "*" + Constants.PackageExtension, true).ToArray();
-            var indexedPackagesByPath = indexedPackages.ToDictionary(pkg => pkg.Path);
+            var indexedPackagesByPath = indexedPackages.ToDictionary(pkg => pkg.Path, StringComparer.InvariantCultureIgnoreCase);
 
             var calc = new IndexDifferenceCalculator(fileSystem, fileSystemPackages, indexedPackagesByPath);
 
@@ -29,9 +29,9 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         private IndexDifferences Calculate()
         {
-            var newPackages = Enumerable.Except(fileSystemPackages, indexedPackagesByPath.Keys);
-            var missingPackages = Enumerable.Except(indexedPackagesByPath.Keys, fileSystemPackages);
-            var modifiedPackages = fileSystemPackages.Intersect(indexedPackagesByPath.Keys).Where(ModifiedDateMismatch);
+            var newPackages = Enumerable.Except(fileSystemPackages, indexedPackagesByPath.Keys, StringComparer.InvariantCultureIgnoreCase);
+            var missingPackages = Enumerable.Except(indexedPackagesByPath.Keys, fileSystemPackages, StringComparer.InvariantCultureIgnoreCase);
+            var modifiedPackages = fileSystemPackages.Intersect(indexedPackagesByPath.Keys, StringComparer.InvariantCultureIgnoreCase).Where(ModifiedDateMismatch);
 
             return new IndexDifferences(newPackages, missingPackages, modifiedPackages);
         }

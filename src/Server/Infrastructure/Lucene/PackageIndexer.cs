@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using Elmah;
 using Lucene.Net.Index;
 using Lucene.Net.Linq;
@@ -44,23 +46,31 @@ namespace NuGet.Server.Infrastructure.Lucene
             return indexingStatus;
         }
 
-        public IAsyncResult BeginSynchronizeIndexWithFileSystem(AsyncCallback callback, object state)
+        public IAsyncResult BeginSynchronizeIndexWithFileSystem(AsyncCallback callback, object clientState)
         {
-            Action action = SynchronizeIndexWithFileSystem;
-            AsyncCallback wrapper = ar =>
-                                        {
-                                            action.EndInvoke(ar);
-                                            if (callback != null)
-                                            {
-                                                callback(ar);
-                                            }
-                                        };
+            var task = new Task(state => SynchronizeIndexWithFileSystem(), clientState, TaskCreationOptions.LongRunning);
+            
+            if (callback != null)
+            {
+                task.ContinueWith(t => callback(t));
+            }
 
-            return action.BeginInvoke(wrapper, state);
+            task.Start();
+
+            return task;
+
         }
 
         public void EndSynchronizeIndexWithFileSystem(IAsyncResult ar)
         {
+            var task = (Task) ar;
+            using (task)
+            {
+                if (task.IsFaulted)
+                {
+                    throw task.Exception;
+                }
+            }
         }
 
         public void SynchronizeIndexWithFileSystem()
@@ -69,9 +79,15 @@ namespace NuGet.Server.Infrastructure.Lucene
             {
                 indexingStatus = new IndexingStatus { State = IndexingState.Scanning };
 
-                using (var session = Provider.OpenSession<LucenePackage>())
+                var session = Provider.OpenSession<LucenePackage>();
+                try
                 {
                     SynchronizeIndexWithFileSystem(IndexDifferenceCalculator.FindDifferences(FileSystem, LucenePackages), session);
+                }
+                finally
+                {
+                    indexingStatus = new IndexingStatus { State = IndexingState.Idle };
+                    session.Dispose();
                 }
             }
         }
@@ -103,7 +119,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             indexingStatus = new IndexingStatus { State = IndexingState.Optimizing };
             Writer.Optimize(true);
 
-            indexingStatus = new IndexingStatus { State = IndexingState.Idle };
+            Log.Info(string.Format("Lucene index updated: {0} packages added, {1} packages updated, {2} packages removed.", diff.NewPackages.Count(), diff.ModifiedPackages.Count(), deleteQueries.Length));
         }
 
         private void SynchronizePackage(ISession<LucenePackage> session, string path)
@@ -116,7 +132,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             }
             catch (Exception ex)
             {
-                ErrorLog.GetDefault(null).Log(new Error(new Exception("Failed to index package path: " + path, ex)));
+                Log.Error("Failed to index package path: " + path, ex);
             }
         }
 
@@ -231,6 +247,19 @@ namespace NuGet.Server.Infrastructure.Lucene
                     session.Commit();
                 }
             }
+        }
+    }
+
+    public static class Log
+    {
+        public static void Info(string message)
+        {
+            ErrorLog.GetDefault(null).Log(new Error(new Exception(message)));
+        }
+
+        public static void Error(string message, Exception ex)
+        {
+            ErrorLog.GetDefault(null).Log(new Error(new Exception(message, ex)));
         }
     }
 }
