@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Elmah;
 using Lucene.Net.Index;
 using Lucene.Net.Linq;
 using Lucene.Net.Search;
@@ -34,8 +33,20 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public void Initialize()
         {
+            AsyncCallback cb = ar =>
+                {
+                    try
+                    {
+                        EndSynchronizeIndexWithFileSystem(ar);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error(ex);
+                    }
+                };
+
             // Sync lucene index with filesystem whenever the web app starts.
-            BeginSynchronizeIndexWithFileSystem(EndSynchronizeIndexWithFileSystem, this);
+            BeginSynchronizeIndexWithFileSystem(cb, this);
         }
 
         /// <summary>
@@ -247,19 +258,6 @@ namespace NuGet.Server.Infrastructure.Lucene
                     session.Commit();
                 }
             }
-        }
-    }
-
-    public static class Log
-    {
-        public static void Info(string message)
-        {
-            ErrorLog.GetDefault(null).Log(new Error(new Exception(message)));
-        }
-
-        public static void Error(string message, Exception ex)
-        {
-            ErrorLog.GetDefault(null).Log(new Error(new Exception(message, ex)));
         }
     }
 }

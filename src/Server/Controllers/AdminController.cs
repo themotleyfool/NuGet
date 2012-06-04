@@ -1,3 +1,4 @@
+using System;
 using System.Web.Mvc;
 using Ninject;
 using NuGet.Server.Infrastructure.Lucene;
@@ -17,9 +18,21 @@ namespace NuGet.Server.Controllers
         [HttpPost]
         public ActionResult Synchronize()
         {
-            Indexer.BeginSynchronizeIndexWithFileSystem(Indexer.EndSynchronizeIndexWithFileSystem, null);
+            Indexer.BeginSynchronizeIndexWithFileSystem(EndSynchrnonize, null);
 
             return Redirect("~/");
+        }
+
+        private void EndSynchrnonize(IAsyncResult ar)
+        {
+            try
+            {
+                Indexer.EndSynchronizeIndexWithFileSystem(ar);
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex);
+            }
         }
     }
 }

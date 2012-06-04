@@ -94,6 +94,7 @@
     <Compile Include="Infrastructure\Lucene\Mapping\PackageDependencyConverter.cs" />
     <Compile Include="Infrastructure\Lucene\PackageIndexer.cs" />
     <Compile Include="Infrastructure\OneFolderPerPackageIdPathResolver.cs" />
+    <Compile Include="Log.cs" />
     <Compile Include="Models\SearchForm.cs" />
     <Compile Include="Publishing\PackageService.cs" />
     <Compile Include="Infrastructure\Bindings.cs" />
