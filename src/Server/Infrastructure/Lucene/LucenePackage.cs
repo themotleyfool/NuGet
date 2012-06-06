@@ -103,17 +103,14 @@ namespace NuGet.Server.Infrastructure.Lucene
         [Field(IndexMode.NotIndexed, Converter = typeof(PackageDependencyConverter))]
         public IEnumerable<PackageDependency> Dependencies { get; set; }
 
-        // TODO
         [IgnoreField]
         public IEnumerable<FrameworkAssemblyReference> FrameworkAssemblies { get; set; }
         
-        // TODO
         [IgnoreField]
         public IEnumerable<IPackageAssemblyReference> AssemblyReferences { get; set; }
 
         public IEnumerable<IPackageFile> GetFiles()
         {
-            // todo: store but not index?
             throw new NotImplementedException();
         }
 
