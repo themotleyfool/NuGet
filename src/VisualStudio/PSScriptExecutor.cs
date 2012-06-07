@@ -2,6 +2,7 @@
 using System.ComponentModel.Composition;
 using System.Globalization;
 using System.IO;
+using System.Runtime.Versioning;
 using EnvDTE;
 using NuGet.VisualStudio.Resources;
 using NuGetConsole;
@@ -35,10 +36,24 @@ namespace NuGet.VisualStudio
 
         public bool Execute(string installPath, string scriptFileName, IPackage package, Project project, ILogger logger)
         {
-            string toolsPath = Path.Combine(installPath, "tools");
-            string fullPath = Path.Combine(toolsPath, scriptFileName);
+            return Execute(installPath, scriptFileName, package, project, project.GetTargetFrameworkName(), logger);
+        }
+
+        public bool Execute(string installPath, string scriptFileName, IPackage package, Project project, FrameworkName targetFramework, ILogger logger)
+        {
+            string scriptPath, fullPath;
+            if (package.FindCompatibleToolFiles(scriptFileName, targetFramework, out scriptPath))
+            {
+                fullPath = Path.Combine(installPath, scriptPath);
+            }
+            else
+            {
+                return false;
+            }
+
             if (File.Exists(fullPath))
             {
+                string toolsPath = Path.GetDirectoryName(fullPath);
                 string logMessage = String.Format(CultureInfo.CurrentCulture, VsResources.ExecutingScript, fullPath);
 
                 // logging to both the Output window and progress window.

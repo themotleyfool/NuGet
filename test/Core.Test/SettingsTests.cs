@@ -869,5 +869,89 @@ namespace NuGet.Test
             Assert.Null(result);
         }
 
+        [Fact]
+        public void GetConfigSettingReadsValueFromConfigSection()
+        {
+            // Arrange
+            var settings = new Mock<ISettings>(MockBehavior.Strict);
+            settings.Setup(s => s.GetValue("config", "foo"))
+                    .Returns("bar")
+                    .Verifiable();
+
+            // Act
+            var result = settings.Object.GetConfigValue("foo");
+
+            // Assert
+            Assert.Equal("bar", result);
+            settings.Verify();
+        }
+
+        [Fact]
+        public void GetConfigSettingReadsEncryptedValueFromConfigSection()
+        {
+            // Arrange
+            var settings = new Mock<ISettings>(MockBehavior.Strict);
+            var value = EncryptionUtility.EncryptString("hello world");
+            settings.Setup(s => s.GetValue("config", "foo"))
+                    .Returns(value)
+                    .Verifiable();
+
+            // Act
+            var result = settings.Object.GetConfigValue("foo", decrypt: true);
+
+            // Assert
+            Assert.Equal("hello world", result);
+            settings.Verify();
+        }
+
+        [Fact]
+        public void SetConfigSettingWritesValueToConfigSection()
+        {
+            // Arrange
+            var settings = new Mock<ISettings>(MockBehavior.Strict);
+            settings.Setup(s => s.SetValue("config", "foo", "bar"))
+                    .Verifiable();
+
+            // Act
+            settings.Object.SetConfigValue("foo", "bar");
+
+            // Assert
+            settings.Verify();
+        }
+
+        [Fact]
+        public void SetConfigSettingWritesEncryptedValueToConfigSection()
+        {
+            // Arrange
+            string value = null;
+            var settings = new Mock<ISettings>(MockBehavior.Strict);
+            settings.Setup(s => s.SetValue("config", "foo", It.IsAny<string>()))
+                    .Callback<string, string, string>((_, __, v) => value = v)
+                    .Verifiable();
+
+            // Act
+            settings.Object.SetConfigValue("foo", "bar", encrypt: true);
+
+            // Assert
+            settings.Verify();
+            Assert.Equal("bar", EncryptionUtility.DecryptString(value));
+        }
+
+        [Fact]
+        public void DeleteConfigSettingDeletesValueFromConfigSection()
+        {
+            // Arrange
+            var settings = new Mock<ISettings>(MockBehavior.Strict);
+            settings.Setup(s => s.DeleteValue("config", "foo"))
+                    .Returns(true)
+                    .Verifiable();
+
+            // Act
+            bool result = settings.Object.DeleteConfigValue("foo");
+
+            // Assert
+            Assert.True(result);
+            settings.Verify();
+        }
     }
 }

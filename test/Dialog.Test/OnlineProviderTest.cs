@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Threading;
 using EnvDTE;
 using Moq;
@@ -14,7 +15,6 @@ using Xunit.Extensions;
 
 namespace NuGet.Dialog.Test
 {
-
     public class OnlineProviderTest
     {
         [Fact]
@@ -220,6 +220,8 @@ namespace NuGet.Dialog.Test
             provider.ExecuteCompletedCallback = delegate
             {
                 // Assert
+                Assert.Equal(RepositoryOperationNames.Install, sourceRepository.LastOperation);
+
                 mockPackageManager.Verify(p => p.InstallPackage(projectManager.Object, packageB, It.IsAny<IEnumerable<PackageOperation>>(), false, includePrerelease, provider), Times.Once());
 
                 manualEvent.Set();
@@ -297,7 +299,7 @@ namespace NuGet.Dialog.Test
                 try
                 {
                     // Assert
-                    scriptExecutor.Verify(p => p.Execute(It.IsAny<string>(), PowerShellScripts.Install, packageB, project.Object, It.IsAny<ILogger>()), Times.Once());
+                    scriptExecutor.Verify(p => p.Execute(It.IsAny<string>(), PowerShellScripts.Install, packageB, project.Object, It.IsAny<FrameworkName>(), It.IsAny<ILogger>()), Times.Once());
                 }
                 finally
                 {
@@ -342,6 +344,7 @@ namespace NuGet.Dialog.Test
             var projectManager = CreateProjectManager(localRepository, solutionRepository);
 
             var project = new Mock<Project>();
+            project.Setup(p => p.Properties.Item("TargetFrameworkMoniker").Value).Returns(".NETFramework, Version=4.0");
             var scriptExecutor = new Mock<IScriptExecutor>();
 
             var packageManager = new Mock<IVsPackageManager>();
@@ -373,7 +376,7 @@ namespace NuGet.Dialog.Test
                     // Assert
 
                     // init.ps1 should be executed
-                    scriptExecutor.Verify(p => p.Execute(It.IsAny<string>(), PowerShellScripts.Init, packageB, null, It.IsAny<ILogger>()), Times.Once());
+                    scriptExecutor.Verify(p => p.Execute(It.IsAny<string>(), PowerShellScripts.Init, packageB, null, null, It.IsAny<ILogger>()), Times.Once());
 
                     // InstallPackage() should get called
                     packageManager.Verify(p => p.InstallPackage(

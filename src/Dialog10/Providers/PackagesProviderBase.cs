@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Windows;
 using EnvDTE;
 using Microsoft.VisualStudio.ExtensionsExplorer;
@@ -18,7 +19,7 @@ namespace NuGet.Dialog.Providers
     /// <summary>
     /// Base class for all tree node types.
     /// </summary>
-    internal abstract class PackagesProviderBase : VsExtensionsProvider, ILogger
+    internal abstract class PackagesProviderBase : VsExtensionsProvider, ILogger, IDisposable
     {
         private PackagesSearchNode _searchNode;
         private PackagesTreeNodeBase _lastSelectedNode;
@@ -129,15 +130,6 @@ namespace NuGet.Dialog.Providers
             {
                 yield break;
             }
-        }
-
-        protected static string GetTargetFramework(Project project)
-        {
-            if (project == null)
-            {
-                return null;
-            }
-            return project.GetTargetFramework();
         }
 
         public override IVsExtensionsTreeNode ExtensionsTree
@@ -555,7 +547,13 @@ namespace NuGet.Dialog.Providers
         {
             Project project = FindProjectFromFileSystem(e.FileSystem);
             Debug.Assert(project != null);
-            _providerServices.ScriptExecutor.ExecuteScript(e.InstallPath, PowerShellScripts.Install, e.Package, project, this);
+            _providerServices.ScriptExecutor.ExecuteScript(
+                e.InstallPath, 
+                PowerShellScripts.Install, 
+                e.Package, 
+                project,
+                project.GetTargetFrameworkName(),
+                this);
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
@@ -565,7 +563,13 @@ namespace NuGet.Dialog.Providers
             Debug.Assert(project != null);
             try
             {
-                _providerServices.ScriptExecutor.ExecuteScript(e.InstallPath, PowerShellScripts.Uninstall, e.Package, project, this);
+                _providerServices.ScriptExecutor.ExecuteScript(
+                    e.InstallPath, 
+                    PowerShellScripts.Uninstall, 
+                    e.Package, 
+                    project,
+                    GetTargetFrameworkForPackage(e.Package.Id) ?? project.GetTargetFrameworkName(),
+                    this);
             }
             catch (Exception ex)
             {
@@ -573,6 +577,17 @@ namespace NuGet.Dialog.Providers
                 // But we log it as a warning.
                 Log(MessageLevel.Warning, ExceptionUtility.Unwrap(ex).Message);
             }
+        }
+
+        private FrameworkName GetTargetFrameworkForPackage(string packageId)
+        {
+            var packageReferenceRepository = LocalRepository as PackageReferenceRepository;
+            if (packageReferenceRepository != null)
+            {
+                return packageReferenceRepository.GetPackageTargetFramework(packageId);
+            }
+
+            return null;
         }
 
         private Project FindProjectFromFileSystem(IFileSystem fileSystem)
@@ -584,13 +599,32 @@ namespace NuGet.Dialog.Providers
         protected void CheckInstallPSScripts(
             IPackage package,
             IPackageRepository sourceRepository,
+            FrameworkName targetFramework,
+            bool includePrerelease,
+            out IList<PackageOperation> operations)
+        {
+            CheckInstallPSScripts(
+                package,
+                LocalRepository,
+                sourceRepository,
+                targetFramework,
+                includePrerelease,
+                out operations);
+        }
+
+        protected void CheckInstallPSScripts(
+            IPackage package,
+            IPackageRepository localRepository,
+            IPackageRepository sourceRepository,
+            FrameworkName targetFramework,
             bool includePrerelease,
             out IList<PackageOperation> operations)
         {
             // Review: Is there any way the user could get into a position that we would need to allow pre release versions here?
             var walker = new InstallWalker(
-                LocalRepository,
+                localRepository,
                 sourceRepository,
+                targetFramework,
                 this,
                 ignoreDependencies: false,
                 allowPrereleaseVersions: includePrerelease);
@@ -606,6 +640,32 @@ namespace NuGet.Dialog.Providers
                     throw new InvalidOperationException(Resources.Dialog_PackageHasPSScript);
                 }
             }
+        }
+
+        protected bool ShowLicenseAgreement(IVsPackageManager packageManager, IEnumerable<PackageOperation> operations)
+        {
+            var licensePackages = from o in operations
+                                  where o.Action == PackageAction.Install &&
+                                        o.Package.RequireLicenseAcceptance &&
+                                        !packageManager.LocalRepository.Exists(o.Package)
+                                  select o.Package;
+
+            // display license window if necessary
+            if (licensePackages.Any())
+            {
+                // hide the progress window if we are going to show license window
+                HideProgressWindow();
+
+                bool accepted = _providerServices.UserNotifierServices.ShowLicenseWindow(licensePackages);
+                if (!accepted)
+                {
+                    return false;
+                }
+
+                ShowProgressWindow();
+            }
+
+            return true;
         }
 
         private void PrepareOpenReadMeFile(PackageOperationEventArgs e)
@@ -639,6 +699,10 @@ namespace NuGet.Dialog.Providers
                 _expandedNodesDisposable.Dispose();
                 _expandedNodesDisposable = null;
             }
+        }
+
+        public virtual void Dispose()
+        {
         }
     }
 }

@@ -289,7 +289,10 @@ namespace NuGet.Commands
                 projectManager.Logger = Console;
             }
 
-            UpdatePackages(localRepository, projectManager);
+            using (sourceRepository.StartOperation(RepositoryOperationNames.Update))
+            {
+                UpdatePackages(localRepository, projectManager);
+            }
         }
 
         internal void UpdatePackages(IPackageRepository localRepository,
@@ -431,7 +434,7 @@ namespace NuGet.Commands
 
                 packages = packages.Where(r => idSet.Contains(r.Id));
             }
-            var packageSorter = new PackageSorter();
+            var packageSorter = new PackageSorter(targetFramework: null);
             return packageSorter.GetPackagesByDependencyOrder(new ReadOnlyPackageRepository(packages)).Reverse();
         }
 

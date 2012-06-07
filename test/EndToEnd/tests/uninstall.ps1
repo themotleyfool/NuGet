@@ -92,7 +92,7 @@ function Test-UninstallPackageWithNestedContentFiles {
 
     # Arrange
     $p = New-WebApplication
-    Install-Package NestedFolders -Project $p.Name -Source $context.RepositoryRoot
+    Install-Package NestedFolders -Project $p.Name -Source $context.RepositoryPath
 
     # Act    
     Uninstall-Package NestedFolders -Project $p.Name
@@ -319,11 +319,11 @@ function Test-UninstallPackageAfterRenaming {
     $p2 = $f | New-ClassLibrary 'ProjectB'
 
     # Act
-    $p1 | Install-Package NestedFolders -Source $context.RepositoryRoot 
+    $p1 | Install-Package NestedFolders -Source $context.RepositoryPath 
     $p1.Name = "ProjectX"
     Uninstall-Package NestedFolders -Project Folder1\Folder2\ProjectX
 
-    $p2 | Install-Package NestedFolders -Source $context.RepositoryRoot 
+    $p2 | Install-Package NestedFolders -Source $context.RepositoryPath 
     $f.Name = "Folder3"
     Uninstall-Package NestedFolders -Project Folder1\Folder3\ProjectB
 
@@ -740,17 +740,126 @@ function Test-UninstallingSatellitePackageThenRuntimePackageRemoveCollidingRunti
 
 function Test-WebSiteSimpleUninstall
 {
-	param(
-		$context
-	)
+    param(
+        $context
+    )
+
+    # Arrange
+    $p = New-Website
+    
+    # Act
+    $p | Install-Package MyAwesomeLibrary -Source $context.RepositoryPath
+    $p | Uninstall-Package MyAwesomeLibrary
+
+    # Assert
+    Assert-PathNotExists (Join-Path $p.FullName "bin\AwesomeLibrary.dll.refresh")
+}
+
+function Test-UninstallPackageUseTheTargetFrameworkPersistedInPackagesConfigToRemoveContentFiles
+{
+	param($context)
 
 	# Arrange
-	$p = New-Website
-	
-	# Act
-	$p | Install-Package MyAwesomeLibrary -Source $context.RepositoryRoot
-	$p | Uninstall-Package MyAwesomeLibrary
+	$p = New-ClassLibrary
 
+	$p | Install-Package PackageA -Source $context.RepositoryPath
+	
+	Assert-Package $p 'packageA'
+	Assert-Package $p 'packageB'
+
+	Assert-NotNull (Get-ProjectItem $p testA4.txt)
+	Assert-NotNull (Get-ProjectItem $p testB4.txt)
+
+	# Act (change the target framework of the project to 3.5 and verifies that it still removes the content files correctly )
+
+	$projectName = $p.Name
+	$p.Properties.Item("TargetFrameworkMoniker").Value = '.NETFramework,Version=3.5'
+
+	$p = Get-Project $projectName
+
+	Uninstall-Package 'PackageA' -Project $projectName -RemoveDependencies
+	
 	# Assert
-	Assert-PathNotExists (Join-Path $p.FullName "bin\AwesomeLibrary.dll.refresh")
+	Assert-NoPackage $p 'PackageA'
+	Assert-NoPackage $p 'PackageB'
+	
+	Assert-Null (Get-ProjectItem $p testA4.txt)
+	Assert-Null (Get-ProjectItem $p testB4.txt)
+}
+
+function Test-UninstallPackageUseTheTargetFrameworkPersistedInPackagesConfigToRemoveAssemblyReferences
+{
+	param($context)
+
+	# Arrange
+	$p = New-ClassLibrary
+
+	$p | Install-Package PackageA -Source $context.RepositoryPath
+	
+	Assert-Package $p 'packageA'
+	Assert-Package $p 'packageB'
+
+	Assert-Reference $p testA4
+	Assert-Reference $p testB4
+
+	# Act (change the target framework of the project to 3.5 and verifies that it still removes the assembly references correctly )
+
+	$projectName = $p.Name
+	$p.Properties.Item("TargetFrameworkMoniker").Value = '.NETFramework,Version=3.5'
+
+	$p = Get-Project $projectName
+
+	Uninstall-Package 'PackageA' -Project $projectName -RemoveDependencies
+	
+	# Assert
+	Assert-NoPackage $p 'PackageA'
+	Assert-NoPackage $p 'PackageB'
+	
+	Assert-Null (Get-AssemblyReference $p testA4.dll)
+	Assert-Null (Get-AssemblyReference $p testB4.dll)
+}
+
+function Test-UninstallPackageUseTheTargetFrameworkPersistedInPackagesConfigToInvokeUninstallScript
+{
+	param($context)
+
+	# Arrange
+	$p = New-ClassLibrary
+
+	$p | Install-Package PackageA -Source $context.RepositoryPath
+	
+	Assert-Package $p 'packageA'
+
+	# Act (change the target framework of the project to 3.5 and verifies that it invokes the correct uninstall.ps1 file in 'net40' folder )
+
+	$projectName = $p.Name
+	$p.Properties.Item("TargetFrameworkMoniker").Value = '.NETFramework,Version=3.5'
+
+	$global:UninstallVar = 0
+
+	$p = Get-Project $projectName
+	Uninstall-Package 'PackageA' -Project $projectName
+	
+	# Assert
+	Assert-NoPackage $p 'PackageA'
+	
+	Assert-AreEqual 1 $global:UninstallVar
+
+	Remove-Variable UninstallVar -Scope Global
+}
+
+
+function Test-ToolsPathForUninstallScriptPointToToolsFolder
+{
+	param($context)
+
+	# Arrange
+	$p = New-SilverlightApplication
+
+	$p | Install-Package PackageA -Version 1.0.0 -Source $context.RepositoryPath
+	Assert-Package $p 'packageA'
+
+	# Act
+
+	$p | Uninstall-Package PackageA
 }

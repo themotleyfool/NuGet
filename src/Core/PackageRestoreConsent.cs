@@ -55,14 +55,7 @@ namespace NuGet
             }
             set
             {
-                if (value)
-                {
-                    _settings.SetValue(PackageRestoreSection, PackageRestoreConsentKey, "true");
-                }
-                else
-                {
-                    _settings.DeleteSection(PackageRestoreSection);
-                }
+                _settings.SetValue(PackageRestoreSection, PackageRestoreConsentKey, value.ToString());
             }
         }
     }

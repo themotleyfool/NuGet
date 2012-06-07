@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace NuGet
 {
-    internal sealed class MemoryCache : IDisposable
+    public sealed class MemoryCache : IDisposable
     {
         private static readonly Lazy<MemoryCache> _instance = new Lazy<MemoryCache>(() => new MemoryCache());
         // Interval to wait before cleaning up expired items
@@ -15,7 +15,7 @@ namespace NuGet
         private readonly ConcurrentDictionary<object, CacheItem> _cache = new ConcurrentDictionary<object, CacheItem>();
         private readonly Timer _timer;
 
-        private MemoryCache()
+        internal MemoryCache()
         {
             _timer = new Timer(RemoveExpiredEntries, null, _cleanupInterval, _cleanupInterval);
         }
@@ -28,31 +28,34 @@ namespace NuGet
             }
         }
 
-        internal T GetOrAdd<T>(object cacheKey, Func<T> factory, TimeSpan slidingExpiration) where T : class
+        internal T GetOrAdd<T>(object cacheKey, Func<T> factory, TimeSpan expiration, bool absoluteExpiration = false) where T : class
         {
-            CacheItem cachedItem;
-            if (!_cache.TryGetValue(cacheKey, out cachedItem) || cachedItem.Expired)
-            {
-                // Recreate the item if it's expired or doesn't exit
-                cachedItem = new CacheItem(factory());
-                _cache.TryAdd(cacheKey, cachedItem);
-            }
+            // Although this method would return values that have expired while also elavating them to unexpired entries,
+            // none of the data that we cache is time sensitive. At worst, an item will be cached for an extra _cleanupInterval duration.
+
+            CacheItem cacheFactory = new CacheItem(factory, expiration, absoluteExpiration);
+
+            var cachedItem = _cache.GetOrAdd(cacheKey, cacheFactory);
 
             // Increase the expiration time
-            cachedItem.UpdateUsage(slidingExpiration);
+            cachedItem.UpdateUsage(expiration);
 
             return (T)cachedItem.Value;
         }
 
-        internal T Get<T>(object cacheKey)
+        internal bool TryGetValue<T>(object cacheKey, out T value) where T : class
         {
-            CacheItem cachedItem;
-            if (_cache.TryGetValue(cacheKey, out cachedItem) && !cachedItem.Expired)
+            CacheItem cacheItem;
+            if (_cache.TryGetValue(cacheKey, out cacheItem))
             {
-                return (T)cachedItem.Value;
+                value = (T)cacheItem.Value;
+                return true;
             }
-
-            return default(T);
+            else
+            {
+                value = null;
+                return false;
+            }
         }
 
         internal void Remove(object cacheKey)
@@ -76,7 +79,7 @@ namespace NuGet
             }
         }
 
-        void IDisposable.Dispose()
+        public void Dispose()
         {
             if (_timer != null)
             {
@@ -84,27 +87,33 @@ namespace NuGet
             }
         }
 
-        private class CacheItem
+        private sealed class CacheItem
         {
-            private readonly object _value;
+            private readonly Lazy<object> _valueFactory;
+            private readonly bool _absoluteExpiration;
             private long _expires;
 
-            public CacheItem(object value)
+            public CacheItem(Func<object> valueFactory, TimeSpan expires, bool absoluteExpiration)
             {
-                _value = value;
+                _valueFactory = new Lazy<object>(valueFactory);
+                _absoluteExpiration = absoluteExpiration;
+                _expires = DateTime.UtcNow.Ticks + expires.Ticks;
             }
 
             public object Value
             {
                 get
                 {
-                    return _value;
+                    return _valueFactory.Value;
                 }
             }
 
             public void UpdateUsage(TimeSpan slidingExpiration)
             {
-                _expires = (DateTime.UtcNow + slidingExpiration).Ticks;
+                if (!_absoluteExpiration)
+                {
+                    _expires = DateTime.UtcNow.Ticks + slidingExpiration.Ticks;
+                }
             }
 
             public bool Expired

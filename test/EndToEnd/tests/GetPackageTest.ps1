@@ -29,8 +29,8 @@ function Test-GetPackageWithUpdatesListsUpdates {
     $p = New-WebApplication
     
     # Act
-    Install-Package Antlr -Version 3.1.1 -Project $p.Name
-    Install-Package jQuery -Version 1.4.1 -Project $p.Name    
+    Install-Package NuGet.Core -Version 1.6.0 -Project $p.Name
+    Install-Package NuGet.CommandLine -Version 1.6.0 -Project $p.Name    
     $packages = Get-Package -Updates
     
     # Assert
@@ -276,7 +276,7 @@ function Test-GetPackageForProjectReturnsEmptyProjectIfItHasNoInstalledPackage {
 function Test-GetPackageForProjectReturnsCorrectPackages {
     # Arrange
     $p = New-ConsoleApplication
-    Install-Package jQuery -Version 1.5 -Source $context.RepositoryRoot
+    Install-Package jQuery -Version 1.5 -Source $context.RepositoryPath
 
     # Act
     $result = @(Get-Package -ProjectName $p.Name)
@@ -292,8 +292,8 @@ function Test-GetPackageForProjectReturnsCorrectPackages2 {
     $p1 = New-ConsoleApplication
     $p2 = New-ClassLibrary
 
-    Install-Package jQuery -Version 1.5 -Source $context.RepositoryRoot -ProjectName $p1.Name
-    Install-Package MyAwesomeLibrary -Version 1.0 -Source $context.RepositoryRoot -ProjectName $p2.Name
+    Install-Package jQuery -Version 1.5 -Source $context.RepositoryPath -ProjectName $p1.Name
+    Install-Package MyAwesomeLibrary -Version 1.0 -Source $context.RepositoryPath -ProjectName $p2.Name
 
     # Act
     $result = @(Get-Package -ProjectName $p1.Name)
@@ -324,7 +324,7 @@ function Test-GetPackageForProjectReturnsEmptyIfItHasNoInstalledPackage2 {
     $p1 = New-ConsoleApplication
     $p2 = New-ClassLibrary
 
-    Install-Package jQuery -Source $context.RepositoryRoot -Project $p1.Name
+    Install-Package jQuery -Source $context.RepositoryPath -Project $p1.Name
  
     # Act
     $result = @(Get-Package -ProjectName $p2.Name)
@@ -354,8 +354,8 @@ function Test-GetPackageWithoutProjectNameReturnsInstalledPackagesInTheSolution 
     $p1 = New-ConsoleApplication
     $p2 = New-ClassLibrary
 
-    Install-Package jQuery -Source $context.RepositoryRoot -Project $p1.Name
-    Install-Package netfx-Guard -Source $context.RepositoryRoot -Project $p2.Name
+    Install-Package jQuery -Source $context.RepositoryPath -Project $p1.Name
+    Install-Package netfx-Guard -Source $context.RepositoryPath -Project $p2.Name
  
     # Act
     $result = @(Get-Package)

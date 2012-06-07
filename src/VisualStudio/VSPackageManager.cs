@@ -99,7 +99,6 @@ namespace NuGet.VisualStudio
             ILogger logger,
             IPackageOperationEventListener packageOperationEventListener)
         {
-
             if (package == null)
             {
                 throw new ArgumentNullException("package");
@@ -155,7 +154,11 @@ namespace NuGet.VisualStudio
 
             RunSolutionAction(() =>
             {
-                InstallPackage(package, ignoreDependencies, allowPrereleaseVersions);
+                InstallPackage(
+                    package, 
+                    projectManager != null ? projectManager.Project.TargetFramework : null, 
+                    ignoreDependencies, 
+                    allowPrereleaseVersions);
 
                 AddPackageReference(projectManager, package, ignoreDependencies, allowPrereleaseVersions);
 
@@ -250,6 +253,10 @@ namespace NuGet.VisualStudio
                 throw new ArgumentNullException("projects");
             }
 
+            var packageToUpdate = LocalRepository.FindPackage(package.Id);
+            Debug.Assert(packageToUpdate != null);
+            var satelliteReferences = SatellitePackageManager.GetSatelliteReferences(packageToUpdate);
+
             ExecuteOperationsWithPackage(
                 projects,
                 package,
@@ -257,6 +264,8 @@ namespace NuGet.VisualStudio
                 projectManager => UpdatePackageReference(projectManager, package.Id, package.Version, updateDependencies, allowPrereleaseVersions),
                 logger,
                 packageOperationEventListener);
+            
+            SatellitePackageManager.ExpandSatellitePackages(satelliteReferences);
         }
 
         public virtual void UpdatePackage(IProjectManager projectManager, string packageId, SemanticVersion version, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger)
@@ -284,9 +293,12 @@ namespace NuGet.VisualStudio
 
                 if (newPackage != null && package.Version != newPackage.Version)
                 {
+                    // Keep track of satellite dependencies for the package. We'll need to refresh them once we finish updating.
+                    IEnumerable<IPackage> satellitePackages = SatellitePackageManager.GetSatelliteReferences(package);                    
                     if (appliesToProject)
                     {
                         RunSolutionAction(projectAction);
+                        SatellitePackageManager.ExpandSatellitePackages(satellitePackages);
                     }
                     else
                     {
@@ -320,7 +332,11 @@ namespace NuGet.VisualStudio
                 throw new ArgumentNullException("operations");
             }
 
+            // We're fine even if there are multiple versions of the package installed. All the packages should have the same set of satellite references available to them.
+            var currentPackage = projectManager.LocalRepository.FindPackage(package.Id);
+            var satelliteReferences = SatellitePackageManager.GetSatelliteReferences(currentPackage);
             ExecuteOperationsWithPackage(projectManager, package, operations, () => UpdatePackageReference(projectManager, package.Id, package.Version, updateDependencies, allowPrereleaseVersions), logger);
+            SatellitePackageManager.ExpandSatellitePackages(satelliteReferences);
         }
 
         public void UpdatePackage(string packageId, IVersionSpec versionSpec, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
@@ -957,6 +973,7 @@ namespace NuGet.VisualStudio
         {
             bool appliesToProject;
             IPackage package = FindLocalPackage(packageId, out appliesToProject);
+            var satelliteReferences = SatellitePackageManager.GetSatelliteReferences(package);
 
             if (appliesToProject)
             {
@@ -1004,6 +1021,7 @@ namespace NuGet.VisualStudio
                 if (newPackage != null)
                 {
                     AddPackageToRecentRepository(newPackage);
+                    SatellitePackageManager.ExpandSatellitePackages(satelliteReferences);
                 }
             }
             else
@@ -1069,7 +1087,7 @@ namespace NuGet.VisualStudio
 
         private void UpdatePackages(IPackageRepository localRepository, Action<IPackage> updateAction, ILogger logger)
         {
-            var packageSorter = new PackageSorter();
+            var packageSorter = new PackageSorter(targetFramework: null);
             // Get the packages in reverse dependency order then run update on each one i.e. if A -> B run Update(A) then Update(B)
             var packages = packageSorter.GetPackagesByDependencyOrder(localRepository).Reverse();
             foreach (var package in packages)

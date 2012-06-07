@@ -21,6 +21,7 @@ namespace NuGet.Commands
     {
         private readonly IPackageRepository _cacheRepository;
         private readonly List<string> _sources = new List<string>();
+        private readonly ISettings _configSettings;
 
         [Option(typeof(NuGetResources), "InstallCommandSourceDescription")]
         public ICollection<string> Source
@@ -62,13 +63,14 @@ namespace NuGet.Commands
 
         [ImportingConstructor]
         public InstallCommand(IPackageRepositoryFactory packageRepositoryFactory, IPackageSourceProvider sourceProvider)
-            : this(packageRepositoryFactory, sourceProvider, MachineCache.Default)
+            : this(packageRepositoryFactory, sourceProvider, Settings.LoadDefaultSettings(), MachineCache.Default)
         {
         }
 
         protected internal InstallCommand(
             IPackageRepositoryFactory packageRepositoryFactory,
             IPackageSourceProvider sourceProvider,
+            ISettings configSettings,
             IPackageRepository cacheRepository)
         {
             if (packageRepositoryFactory == null)
@@ -81,9 +83,15 @@ namespace NuGet.Commands
                 throw new ArgumentNullException("sourceProvider");
             }
 
+            if (configSettings == null)
+            {
+                throw new ArgumentNullException("configSettings");
+            }
+
             RepositoryFactory = packageRepositoryFactory;
             SourceProvider = sourceProvider;
             _cacheRepository = cacheRepository;
+            _configSettings = configSettings;
         }
 
         public override void ExecuteCommand()
@@ -106,7 +114,7 @@ namespace NuGet.Commands
                 string packageId = Arguments[0];
                 SemanticVersion version = Version != null ? new SemanticVersion(Version) : null;
 
-                bool result = InstallPackage(fileSystem, packageId, version, ignoreDependencies: false);
+                bool result = InstallPackage(fileSystem, packageId, version, ignoreDependencies: false, packageRestoreConsent: true, operation: RepositoryOperationNames.Install);
                 if (!result)
                 {
                     Console.WriteLine(NuGetResources.InstallCommandPackageAlreadyExists, packageId);
@@ -171,6 +179,7 @@ namespace NuGet.Commands
 
         private bool ExecuteInParallel(IFileSystem fileSystem, List<PackageReference> packageReferences)
         {
+            bool packageRestore = new PackageRestoreConsent(_configSettings).IsGranted;
             int defaultConnectionLimit = ServicePointManager.DefaultConnectionLimit;
             if (packageReferences.Count > defaultConnectionLimit)
             {
@@ -178,7 +187,7 @@ namespace NuGet.Commands
             }
 
             var tasks = packageReferences.Select(package =>
-                            Task.Factory.StartNew(() => InstallPackage(fileSystem, package.Id, package.Version, ignoreDependencies: true))).ToArray();
+                            Task.Factory.StartNew(() => InstallPackage(fileSystem, package.Id, package.Version, ignoreDependencies: true, packageRestoreConsent: packageRestore, operation: RepositoryOperationNames.Restore))).ToArray();
 
             Task.WaitAll(tasks);
             return tasks.All(p => !p.IsFaulted && p.Result);
@@ -188,47 +197,56 @@ namespace NuGet.Commands
             IFileSystem fileSystem,
             string packageId,
             SemanticVersion version,
-            bool ignoreDependencies)
+            bool ignoreDependencies,
+            bool packageRestoreConsent,
+            string operation)
         {
             var packageManager = CreatePackageManager(fileSystem);
-            if (!AllowMultipleVersions)
+            using (packageManager.SourceRepository.StartOperation(operation))
             {
-                var installedPackage = packageManager.LocalRepository.FindPackage(packageId);
-                if (installedPackage != null)
+                if (!AllowMultipleVersions)
                 {
-                    if (version != null && installedPackage.Version >= version)
+                    var installedPackage = packageManager.LocalRepository.FindPackage(packageId);
+                    if (installedPackage != null)
                     {
-                        // If the package is already installed (or the version being installed is lower), then we do not need to do anything. 
+                        if (version != null && installedPackage.Version >= version)
+                        {
+                            // If the package is already installed (or the version being installed is lower), then we do not need to do anything. 
+                            return false;
+                        }
+                        else if (packageManager.SourceRepository.Exists(packageId, version))
+                        {
+                            EnsurePackageRestoreConsent(packageRestoreConsent);
+
+                            // If the package is already installed, but
+                            // (a) the version we require is different from the one that is installed, 
+                            // (b) side-by-side is disabled
+                            // we need to uninstall it.
+                            // However, before uninstalling, make sure the package exists in the source repository. 
+                            packageManager.UninstallPackage(installedPackage, forceRemove: false, removeDependencies: true);
+                        }
+                    }
+                }
+                else if (version != null)
+                {
+                    // If we know exactly what package to lookup, check if it's already installed locally. 
+                    // We'll do this by checking if the package directory exists on disk.
+                    var localRepository = packageManager.LocalRepository as LocalPackageRepository;
+                    Debug.Assert(localRepository != null, "The PackageManager's local repository instance is necessarily a LocalPackageRepository instance.");
+                    if (IsPackageInstalled(localRepository, packageManager.FileSystem, packageId, version))
+                    {
                         return false;
                     }
-                    else if (packageManager.SourceRepository.Exists(packageId, version))
-                    {
-                        // If the package is already installed, but
-                        // (a) the version we require is different from the one that is installed, 
-                        // (b) side-by-side is disabled
-                        // we need to uninstall it.
-                        // However, before uninstalling, make sure the package exists in the source repository. 
-                        packageManager.UninstallPackage(installedPackage, forceRemove: false, removeDependencies: true);
-                    }
                 }
-            }
-            else if (version != null)
-            {
-                // If we know exactly what package to lookup, check if it's already installed locally. 
-                // We'll do this by checking if the package directory exists on disk.
-                var localRepository = packageManager.LocalRepository as LocalPackageRepository;
-                Debug.Assert(localRepository != null, "The PackageManager's local repository instance is necessarily a LocalPackageRepository instance.");
-                if (IsPackageInstalled(localRepository, packageManager.FileSystem, packageId, version))
-                {
-                    return false;
-                }
-            }
 
-            // During package restore with parallel build, multiple projects would try to write to disk simultaneously which results in write contentions.
-            // We work around this issue by ensuring only one instance of the exe installs the package.
-            var uniqueToken = GenerateUniqueToken(packageManager, packageId, version);
-            ExecuteLocked(uniqueToken, () => packageManager.InstallPackage(packageId, version, ignoreDependencies: ignoreDependencies, allowPrereleaseVersions: Prerelease));
-            return true;
+                EnsurePackageRestoreConsent(packageRestoreConsent);
+
+                // During package restore with parallel build, multiple projects would try to write to disk simultaneously which results in write contentions.
+                // We work around this issue by ensuring only one instance of the exe installs the package.
+                var uniqueToken = GenerateUniqueToken(packageManager, packageId, version);
+                ExecuteLocked(uniqueToken, () => packageManager.InstallPackage(packageId, version, ignoreDependencies: ignoreDependencies, allowPrereleaseVersions: Prerelease));
+                return true;
+            }
         }
 
         protected virtual IPackageManager CreatePackageManager(IFileSystem fileSystem)
@@ -257,6 +275,14 @@ namespace NuGet.Commands
             using (fileSystem.OpenFile(configFilePath))
             {
                 // Do nothing
+            }
+        }
+
+        private static void EnsurePackageRestoreConsent(bool packageRestoreConsent)
+        {
+            if (!packageRestoreConsent)
+            {
+                throw new InvalidOperationException(NuGetResources.InstallCommandPackageRestoreConsentNotFound);
             }
         }
 

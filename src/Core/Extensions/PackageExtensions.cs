@@ -25,6 +25,12 @@ namespace NuGet
             return package.Listed || package.Published > Constants.Unpublished;
         }
 
+        public static bool IsEmptyFolder(this IPackageFile packageFile)
+        {
+            return packageFile != null && 
+                   Constants.PackageEmptyFileName.Equals(Path.GetFileName(packageFile.Path), StringComparison.OrdinalIgnoreCase);
+        }
+
         public static IEnumerable<IPackage> FindByVersion(this IEnumerable<IPackage> source, IVersionSpec versionSpec)
         {
             if (versionSpec == null)
@@ -37,12 +43,18 @@ namespace NuGet
 
         public static IEnumerable<IPackageFile> GetFiles(this IPackage package, string directory)
         {
-            return package.GetFiles().Where(file => file.Path.StartsWith(directory + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase));
+            string folderPrefix = directory + Path.DirectorySeparatorChar;
+            return package.GetFiles().Where(file => file.Path.StartsWith(folderPrefix, StringComparison.OrdinalIgnoreCase));
         }
 
         public static IEnumerable<IPackageFile> GetContentFiles(this IPackage package)
         {
             return package.GetFiles(Constants.ContentDirectory);
+        }
+
+        public static IEnumerable<IPackageFile> GetToolFiles(this IPackage package)
+        {
+            return package.GetFiles(Constants.ToolsDirectory);
         }
 
         public static IEnumerable<IPackageFile> GetLibFiles(this IPackage package)
@@ -117,10 +129,27 @@ namespace NuGet
 
         public static IEnumerable<FrameworkName> GetSupportedFrameworks(this IPackage package)
         {
+            // The supported frameworks of a package is the union of the supported frameworks
+            // of Content/Lib/Tools folders and those of Framework Assemblies.
             return package.FrameworkAssemblies
                           .SelectMany(a => a.SupportedFrameworks)
-                          .Concat(package.AssemblyReferences.SelectMany(a => a.SupportedFrameworks))
+                          .Concat(package.GetFiles().SelectMany(a => a.SupportedFrameworks))
                           .Distinct();
+        }
+
+        public static IEnumerable<PackageDependency> GetCompatiblePackageDependencies(this IPackageMetadata package, FrameworkName targetFramework)
+        {
+            IEnumerable<PackageDependencySet> compatibleDependencySets;
+            if (targetFramework == null)
+            {
+                compatibleDependencySets = package.DependencySets;
+            }
+            else if (!VersionUtility.TryGetCompatibleItems(targetFramework, package.DependencySets, out compatibleDependencySets))
+            {
+                compatibleDependencySets = new PackageDependencySet[0];
+            }
+
+            return compatibleDependencySets.SelectMany(d => d.Dependencies);
         }
 
         /// <summary>
@@ -128,7 +157,8 @@ namespace NuGet
         /// </summary>
         public static bool IsDependencyOnly(this IPackage package)
         {
-            return !package.GetFiles().Any() && package.Dependencies.Any();
+            return !package.GetFiles().Any() && 
+                   package.DependencySets.SelectMany(d => d.Dependencies).Any();
         }
 
         public static string GetFullName(this IPackageMetadata package)
@@ -139,7 +169,7 @@ namespace NuGet
         /// <summary>
         /// Calculates the canonical list of operations.
         /// </summary>
-        internal static IList<PackageOperation> Reduce(this IEnumerable<PackageOperation> operations)
+        public static IList<PackageOperation> Reduce(this IEnumerable<PackageOperation> operations)
         {
             // Convert the list of operations to a dictionary from (Action, Id, Version) -> [Operations]
             // We keep track of the index so that we preserve the ordering of the operations
@@ -198,6 +228,16 @@ namespace NuGet
         public static IEnumerable<IPackage> AsCollapsed(this IEnumerable<IPackage> source)
         {
             return source.DistinctLast(PackageEqualityComparer.Id, PackageComparer.Version);
+        }
+
+
+        /// <summary>
+        /// Collapses the packages by Id picking up the highest version for each Id that it encounters
+        /// </summary>
+        internal static IEnumerable<IPackage> CollapseById(this IEnumerable<IPackage> source)
+        {
+            return source.GroupBy(p => p.Id, StringComparer.OrdinalIgnoreCase)
+                         .Select(g => g.OrderByDescending(p => p.Version).First());
         }
 
         public static IEnumerable<IPackage> FilterByPrerelease(this IEnumerable<IPackage> packages, bool allowPrerelease)

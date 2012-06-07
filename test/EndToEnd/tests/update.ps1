@@ -430,11 +430,11 @@ function Test-UpdatePackageInAllProjects {
     Update-Package Ninject
 
     # Assert
-    Assert-SolutionPackage Ninject 3.0.0.15
-    Assert-Package $p1 Ninject 3.0.0.15
-    Assert-Package $p2 Ninject 3.0.0.15
-    Assert-Package $p3 Ninject 3.0.0.15
-    Assert-Package $p4 Ninject 3.0.0.15
+    Assert-SolutionPackage Ninject 3.0.1.10
+    Assert-Package $p1 Ninject 3.0.1.10
+    Assert-Package $p2 Ninject 3.0.1.10
+    Assert-Package $p3 Ninject 3.0.1.10
+    Assert-Package $p4 Ninject 3.0.1.10
     Assert-Null (Get-SolutionPackage Ninject 2.0.1.0)
     Assert-Null (Get-SolutionPackage Ninject 2.1.0.76)
     Assert-Null (Get-SolutionPackage Ninject 2.2.0.0)
@@ -628,11 +628,11 @@ function Test-UpdateAllPackagesInASingleProjectWithMultipleProjects {
     # Arrange
     $p1 = New-WebApplication
     $p2 = New-WebApplication
-    $p1, $p2 | Install-Package jQuery -Version 1.5.1 -Source $context.RepositoryRoot
-    $p1, $p2 | Install-Package jQuery.UI.Combined  -Version 1.8.11 -Source $context.RepositoryRoot
+    $p1, $p2 | Install-Package jQuery -Version 1.5.1 -Source $context.RepositoryPath
+    $p1, $p2 | Install-Package jQuery.UI.Combined  -Version 1.8.11 -Source $context.RepositoryPath
 
     # Act
-    $p1 | Update-Package -Source $context.RepositoryRoot
+    $p1 | Update-Package -Source $context.RepositoryPath
 
     # Assert
     Assert-Package $p1 jQuery 1.6.1
@@ -649,11 +649,11 @@ function Test-UpdateAllPackagesInASingleProjectWithSafeFlagAndMultipleProjects {
     # Arrange
     $p1 = New-WebApplication
     $p2 = New-WebApplication
-    $p1, $p2 | Install-Package jQuery -Version 1.5.1 -Source $context.RepositoryRoot
-    $p1, $p2 | Install-Package jQuery.UI.Combined  -Version 1.8.11 -Source $context.RepositoryRoot
+    $p1, $p2 | Install-Package jQuery -Version 1.5.1 -Source $context.RepositoryPath
+    $p1, $p2 | Install-Package jQuery.UI.Combined  -Version 1.8.11 -Source $context.RepositoryPath
 
     # Act
-    $p1 | Update-Package -Safe -Source $context.RepositoryRoot
+    $p1 | Update-Package -Safe -Source $context.RepositoryPath
 
     # Assert
     Assert-Package $p1 jQuery 1.5.2
@@ -693,7 +693,7 @@ function Test-UpdatePackageInOneProjectDoesNotCheckAllPackagesInSolution {
     # Arrange
     $p1 = New-ConsoleApplication
     $p2 = New-ConsoleApplication
-    $p1 | Install-Package jQuery -Version 1.5.1 -Source $context.RepositoryRoot
+    $p1 | Install-Package jQuery -Version 1.5.1 -Source $context.RepositoryPath
 
     # Act
     $p2 | Update-Package -Source $context.RepositoryRoot
@@ -960,4 +960,90 @@ function Test-UpdatePackageDontMakeExcessiveNetworkRequests
         Unregister-Event $eventId -ea SilentlyContinue
         Remove-Variable 'numberOfRequests' -Scope 'Global' -ea SilentlyContinue
     }
+}
+
+function Test-UpdatingPackageWithSatelliteReferencesCorrectlyReplacesThem 
+{
+	param(
+        $context
+    )
+
+    # Arrange
+    $p = New-ClassLibrary
+
+	# Act - 1
+	$p | Install-Package -Source $context.RepositoryPath Localized -Version 1.0
+	$p | Install-Package -Source $context.RepositoryPath Localized.fr-Fr -Version 1.0
+
+	# Assert - 1
+	Assert-Package $p Localized 1.0
+	Assert-Package $p Localized.fr-Fr 1.0
+
+	# Act - 2 
+	$p | Update-Package -Source $context.RepositoryPath Localized
+
+	# Assert-2
+	Assert-Package $p Localized 2.0
+
+	$solutionDir = Get-SolutionDir
+	$packageDir = (Join-Path $solutionDir packages\Localized.2.0)
+	Assert-PathExists (Join-Path $packageDir 'lib\net40\fr-FR\Main.resources.dll')
+}
+
+function Test-UpdatingPackageWithSatelliteReferencesCorrectlyReplacesThemForUpdateCommandWithoutProjectParam 
+{
+	param(
+        $context
+    )
+
+    # Arrange
+    $p1 = New-ClassLibrary
+    $p2 = New-ClassLibrary
+
+	# Act - 1
+	$p1 | Install-Package -Source $context.RepositoryPath Localized -Version 1.0
+	$p2 | Install-Package -Source $context.RepositoryPath Localized -Version 1.0
+	$p1 | Install-Package -Source $context.RepositoryPath Localized.fr-Fr -Version 1.0
+	$p2 | Install-Package -Source $context.RepositoryPath Localized.fr-Fr -Version 1.0
+
+	# Assert - 1
+	Assert-Package $p1 Localized 1.0
+	Assert-Package $p2 Localized 1.0
+
+	# Act - 2 
+	Update-Package -Source $context.RepositoryPath Localized
+
+	# Assert-2
+	Assert-Package $p1 Localized 2.0
+	Assert-Package $p2 Localized 2.0
+
+	$solutionDir = Get-SolutionDir
+	$packageDir = (Join-Path $solutionDir packages\Localized.2.0)
+	Assert-PathExists (Join-Path $packageDir 'lib\net40\fr-FR\Main.resources.dll')
+}
+
+function Test-UpdatePackageInstallCorrectDependencyPackageBasedOnTargetFramework
+{
+	param($context)
+
+	# Arrange
+	$project = New-ClassLibrary
+
+	$global:InstallVar = 0
+
+	Install-Package TestDependencyTargetFramework -Version 1.0 -Project $project.Name -Source $context.RepositoryPath
+
+	Assert-Package $project TestDependencyTargetFramework -Version 1.0
+	Assert-Package $project TestEmptyLibFolder
+	Assert-NoPackage $project TestEmptyContentFolder
+	Assert-NoPackage $project TestEmptyToolsFolder
+
+	# Act
+	Update-Package TestDependencyTargetFramework -Version 2.0 -Project $project.Name -Source $context.RepositoryPath
+
+	# Assert
+	Assert-Package $project TestDependencyTargetFramework -Version 2.0
+	Assert-Package $project TestEmptyToolsFolder
+	Assert-NoPackage $project TestEmptyLibFolder
+	Assert-NoPackage $project TestEmptyContentFolder
 }

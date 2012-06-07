@@ -2,8 +2,10 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Windows;
 using EnvDTE;
 using Microsoft.VisualStudio.ExtensionsExplorer;
@@ -22,6 +24,8 @@ namespace NuGet.Dialog.Providers
         private readonly IVsPackageManager _packageManager;
         private readonly Project _project;
         private readonly IUserNotifierServices _userNotifierServices;
+        private readonly IPackageRestoreManager _packageRestoreManager;
+        private readonly FrameworkName _targetFramework;
 
         public InstalledProvider(
             IVsPackageManager packageManager,
@@ -30,7 +34,8 @@ namespace NuGet.Dialog.Providers
             ResourceDictionary resources,
             ProviderServices providerServices,
             IProgressProvider progressProvider,
-            ISolutionManager solutionManager)
+            ISolutionManager solutionManager,
+            IPackageRestoreManager packageRestoreManager)
             : base(localRepository, resources, providerServices, progressProvider, solutionManager)
         {
 
@@ -41,7 +46,10 @@ namespace NuGet.Dialog.Providers
 
             _packageManager = packageManager;
             _project = project;
+            _targetFramework = _project.GetTargetFrameworkName();
             _userNotifierServices = providerServices.UserNotifierServices;
+            _packageRestoreManager = packageRestoreManager;
+            _packageRestoreManager.PackagesMissingStatusChanged += OnMissPackagesChanged;
         }
 
         protected IVsPackageManager PackageManager
@@ -101,17 +109,18 @@ namespace NuGet.Dialog.Providers
         {
             get
             {
-                string targetFramework = GetTargetFramework(_project);
+                string targetFramework = _project.GetTargetFramework();
                 return targetFramework != null ? new[] { targetFramework } : new string[0];
             }
         }
 
         protected override IList<IVsSortDescriptor> CreateSortDescriptors()
         {
-            return new List<IVsSortDescriptor> {
+            return new List<IVsSortDescriptor> 
+                   {
                         new PackageSortDescriptor(String.Format(CultureInfo.CurrentCulture, "{0}: {1}", Resources.Dialog_SortOption_Name, Resources.Dialog_SortAscending), new[] { "Title", "Id" }, ListSortDirection.Ascending),
                         new PackageSortDescriptor(String.Format(CultureInfo.CurrentCulture, "{0}: {1}", Resources.Dialog_SortOption_Name, Resources.Dialog_SortDescending), new[] { "Title", "Id" }, ListSortDirection.Descending)
-                  };
+                   };
         }
 
         protected override void FillRootNodes()
@@ -132,54 +141,81 @@ namespace NuGet.Dialog.Providers
 
         protected override bool ExecuteCore(PackageItem item)
         {
-            bool? removeDependencies = AskRemoveDependencyAndCheckUninstallPSScript(item.PackageIdentity, checkDependents: true);
+            CheckDependentPackages(item.PackageIdentity, LocalRepository, _targetFramework);
+
+            bool? removeDependencies = AskRemoveDependencyAndCheckUninstallPSScript(
+                item.PackageIdentity,
+                new [] { LocalRepository },
+                new [] { _targetFramework });
+
             if (removeDependencies == null)
             {
                 // user presses Cancel
                 return false;
             }
+
             ShowProgressWindow();
             UninstallPackageFromProject(_project, item, (bool)removeDependencies);
             HideProgressWindow();
             return true;
         }
 
-        protected bool? AskRemoveDependencyAndCheckUninstallPSScript(IPackage package, bool checkDependents)
+        protected void CheckDependentPackages(
+            IPackage package,
+            IPackageRepository localRepository,
+            FrameworkName targetFramework)
         {
-            if (checkDependents)
+            // check if there is any other package depends on this package.
+            // if there is, throw to cancel the uninstallation
+            var dependentsWalker = new DependentsWalker(localRepository, targetFramework);
+            IList<IPackage> dependents = dependentsWalker.GetDependents(package).ToList();
+            if (dependents.Count > 0)
             {
-                // check if there is any other package depends on this package.
-                // if there is, throw to cancel the uninstallation
-                var dependentsWalker = new DependentsWalker(LocalRepository);
-                IList<IPackage> dependents = dependentsWalker.GetDependents(package).ToList();
-                if (dependents.Count > 0)
-                {
-                    ShowProgressWindow();
-                    throw new InvalidOperationException(
-                        String.Format(
-                            CultureInfo.CurrentCulture,
-                            Resources.PackageHasDependents,
-                            package.GetFullName(),
-                            String.Join(", ", dependents.Select(d => d.GetFullName()))
-                        )
-                    );
-                }
+                ShowProgressWindow();
+                throw new InvalidOperationException(
+                    String.Format(
+                        CultureInfo.CurrentCulture,
+                        Resources.PackageHasDependents,
+                        package.GetFullName(),
+                        String.Join(", ", dependents.Select(d => d.GetFullName()))
+                    )
+                );
+            }
+        }
+
+        protected bool? AskRemoveDependencyAndCheckUninstallPSScript(
+            IPackage package,
+            IList<IPackageRepository> localRepositories,
+            IList<FrameworkName> targetFrameworks)
+        {
+            Debug.Assert(localRepositories.Count == targetFrameworks.Count);
+
+            var allOperations = new List<PackageOperation>();
+
+            for (int i = 0; i < localRepositories.Count; i++)
+            {
+                var uninstallWalker = new UninstallWalker(
+                    localRepositories[i],
+                    new DependentsWalker(localRepositories[i], targetFrameworks[i]),
+                    targetFrameworks[i],
+                    logger: NullLogger.Instance,
+                    removeDependencies: true,
+                    forceRemove: false)
+                    {
+                        ThrowOnConflicts = false
+                    };
+                var operations = uninstallWalker.ResolveOperations(package);
+                allOperations.AddRange(operations);
             }
 
-            var uninstallWalker = new UninstallWalker(
-                LocalRepository,
-                new DependentsWalker(LocalRepository),
-                logger: NullLogger.Instance,
-                removeDependencies: true,
-                forceRemove: false)
-                {
-                    ThrowOnConflicts = false
-                };
-            IList<PackageOperation> operations = uninstallWalker.ResolveOperations(package).ToList();
+            allOperations = allOperations.Reduce().ToList();
 
-            var uninstallPackageNames = (from o in operations
+            var uninstallPackageNames = (from o in allOperations
                                          where o.Action == PackageAction.Uninstall && !PackageEqualityComparer.IdAndVersion.Equals(o.Package, package)
-                                         select o.Package.ToString()).ToList();
+                                         select o.Package)
+                                         .Distinct(PackageEqualityComparer.IdAndVersion)
+                                         .Select(p => p.ToString())
+                                         .ToList();
 
             bool? removeDependencies = false;
             if (uninstallPackageNames.Count > 0)
@@ -193,6 +229,7 @@ namespace NuGet.Dialog.Providers
 
                 removeDependencies = _userNotifierServices.ShowRemoveDependenciesWindow(message);
             }
+
             if (removeDependencies == null)
             {
                 return removeDependencies;
@@ -202,7 +239,7 @@ namespace NuGet.Dialog.Providers
             if (removeDependencies == true)
             {
                 // if user wants to remove dependencies, we need to check all of them for PS scripts
-                var scriptPackages = from o in operations
+                var scriptPackages = from o in allOperations
                                      where o.Package.HasPowerShellScript()
                                      select o.Package;
                 hasScriptPackages = scriptPackages.Any();
@@ -224,17 +261,17 @@ namespace NuGet.Dialog.Providers
             return removeDependencies;
         }
 
-        protected void InstallPackageToProject(Project project, PackageItem item, bool includePrerelease)
+        protected void InstallPackageToProject(Project project, IPackage package, bool includePrerelease)
         {
             IProjectManager projectManager = null;
             try
             {
                 projectManager = PackageManager.GetProjectManager(project);
                 // make sure the package is not installed in this project before proceeding
-                if (!projectManager.IsInstalled(item.PackageIdentity))
+                if (!projectManager.IsInstalled(package))
                 {
                     RegisterPackageOperationEvents(PackageManager, projectManager);
-                    PackageManager.InstallPackage(projectManager, item.Id, item.PackageIdentity.Version, ignoreDependencies: false, allowPrereleaseVersions: includePrerelease, logger: this);
+                    PackageManager.InstallPackage(projectManager, package.Id, package.Version, ignoreDependencies: false, allowPrereleaseVersions: includePrerelease, logger: this);
                 }
             }
             finally
@@ -286,7 +323,8 @@ namespace NuGet.Dialog.Providers
         {
             return new PackageItem(this, package)
             {
-                CommandName = Resources.Dialog_UninstallButton
+                CommandName = Resources.Dialog_UninstallButton,
+                TargetFramework = _project.GetTargetFrameworkName()
             };
         }
 
@@ -309,6 +347,26 @@ namespace NuGet.Dialog.Providers
         protected override string GetProgressMessage(IPackage package)
         {
             return Resources.Dialog_UninstallProgress + package.ToString();
+        }
+
+        private void OnMissPackagesChanged(object sender, PackagesMissingStatusEventArgs e)
+        {
+            // after packages are restored, refresh the installed tab to show those packages.
+            if (!e.PackagesMissing)
+            {
+                if (SelectedNode != null)
+                {
+                    SelectedNode.Refresh(resetQueryBeforeRefresh: true);
+                }
+            }
+        }
+
+        public override void Dispose()
+        {
+            base.Dispose();
+
+            // to avoid memory leak, we need to unsubscribe from the event
+            _packageRestoreManager.PackagesMissingStatusChanged -= OnMissPackagesChanged;
         }
     }
 }

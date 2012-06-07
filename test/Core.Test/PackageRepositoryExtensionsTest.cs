@@ -1,20 +1,20 @@
 ﻿using System.Globalization;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Threading;
 using Moq;
-using Xunit;
 using NuGet.Test.Mocks;
-using Xunit.Extensions;
+using Xunit;
 
 namespace NuGet.Test
 {
     public class PackageRepositoryExtensionsTest
     {
         [Fact]
-        public void FindPackagesByIdRecognizeIFindPackagesRepositoryInterface()
+        public void FindPackagesByIdUsesSearchableRepositoryIfAvailable()
         {
             // Arrange
-            var repository = new Mock<ISearchableRepository>();
+            var repository = new Mock<IServiceBasedRepository>();
             repository.Setup(p => p.FindPackagesById("A")).Returns(new IPackage[0]).Verifiable();
 
             // Act
@@ -25,11 +25,30 @@ namespace NuGet.Test
         }
 
         [Fact]
+        public void ExistsMethodUsesIPackageLookupIfUnderlyingRepositorySupportsIt()
+        {
+            // Arrange
+            var repository = new Mock<IPackageRepository>(MockBehavior.Strict);
+
+            repository.As<IPackageLookup>()
+                      .Setup(p => p.Exists("A", new SemanticVersion("1.0")))
+                      .Returns(true)
+                      .Verifiable();
+
+            // Act
+            bool result = PackageRepositoryExtensions.Exists(repository.Object, "A", new SemanticVersion("1.0"));
+
+            // Assert
+            Assert.True(result);
+            repository.Verify();
+        }
+
+        [Fact]
         public void FindPackagesByIdRecognizeICultureAwareRepositoryInterface()
         {
             var turkeyCulture = new CultureInfo("tr-TR");
             string smallPackageName = "YUI".ToLower(turkeyCulture);
-            
+
             // Arrange
             var packages = new IPackage[] 
             { 
@@ -47,7 +66,7 @@ namespace NuGet.Test
             {
                 // simulate running on Turkish locale
                 Thread.CurrentThread.CurrentCulture = turkeyCulture;
-                
+
                 // Act
                 // notice the lowercase Turkish I character in the packageId to search for
                 var foundPackages = PackageRepositoryExtensions.FindPackagesById(repository.Object, "yuı").ToList();
@@ -79,7 +98,8 @@ namespace NuGet.Test
             };
 
             // Act
-            var foundPackages = PackageRepositoryExtensions.GetUpdates(sourceRepository, packages, includePrerelease: true, includeAllVersions: true).ToList();
+            var foundPackages = PackageRepositoryExtensions.GetUpdates(sourceRepository, packages, includePrerelease: true, targetFramework: Enumerable.Empty<FrameworkName>(),
+                                                                       includeAllVersions: true).ToList();
 
             // Assert
             Assert.Equal(3, foundPackages.Count);
@@ -92,23 +112,6 @@ namespace NuGet.Test
 
             Assert.Equal("A", foundPackages[2].Id);
             Assert.Equal(new SemanticVersion("3.0-alpha"), foundPackages[2].Version);
-        }
-
-        [Theory]
-        [InlineData(true)]
-        [InlineData(false)]
-        public void ExistsCheckForIFastExistenceLookup(bool returnValue)
-        {
-            // Arrange
-            var repository = new Mock<IFastExistenceLookup>(MockBehavior.Strict);
-            repository.Setup(p => p.Exists("A", new SemanticVersion("1.0"))).Returns(returnValue).Verifiable();
-
-            // Act
-            bool exists = repository.Object.Exists("A", new SemanticVersion("1.0"));
-
-            // Assert
-            repository.Verify();
-            Assert.Equal(returnValue, exists);
         }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 
@@ -105,35 +106,60 @@ namespace NuGet
             return FindPackage(OpenPackage, packageId, version);
         }
 
+        public virtual bool Exists(string packageId, SemanticVersion version)
+        {
+            return FindPackage(packageId, version) != null;
+        }
+
         public IEnumerable<string> GetPackageLookupPaths(string packageId, SemanticVersion version)
         {
-            // Since we look at the file system to determine if a package is installed,
-            // we need to enumerate the list of possible versions and check the path for
-            // each one
-            return (from v in VersionUtility.GetPossibleVersions(version)
-                    from path in GetPackagePaths(packageId, v)
-                    select path).Distinct();
+            // Files created by the path resolver. This would take into account the non-side-by-side scenario 
+            // and we do not need to match this for id and version.
+            var packageFileName = PathResolver.GetPackageFileName(packageId, version);
+            var filesMatchingFullName = GetPackageFiles(packageFileName);
+
+            if (version.Version.Revision < 1)
+            {
+                // If the build or revision number is not set, we need to look for combinations of the format
+                // * Foo.1.2.nupkg
+                // * Foo.1.2.3.nupkg
+                // * Foo.1.2.0.nupkg
+                // * Foo.1.2.0.0.nupkg
+                // To achieve this, we would look for files named 1.2*.nupkg if both build and revision are 0 and
+                // 1.2.3*.nupkg if only the revision is set to 0.
+                string partialName = version.Version.Build < 1 ?
+                                        String.Join(".", packageId, version.Version.Major, version.Version.Minor) :
+                                        String.Join(".", packageId, version.Version.Major, version.Version.Minor, version.Version.Build);
+                partialName += "*" + Constants.PackageExtension;
+
+                // Partial names would result is gathering package with matching major and minor but different build and revision. 
+                // Attempt to match the version in the path to the version we're interested in.
+                var partialNameMatches = GetPackageFiles(partialName).Where(path => FileNameMatchesPattern(packageId, version, path));
+                return Enumerable.Concat(filesMatchingFullName, partialNameMatches);
+            }
+            return filesMatchingFullName;
         }
 
         internal IPackage FindPackage(Func<string, IPackage> openPackage, string packageId, SemanticVersion version)
         {
-            return (from path in GetPackageLookupPaths(packageId, version)
-                    where FileSystem.FileExists(path)
-                    let package = GetPackage(openPackage, path)
-                    where package.Version == version
-                    select package).FirstOrDefault();
-        }
-
-        private IEnumerable<string> GetPackagePaths(string packageId, SemanticVersion version)
-        {
-            var packageName = new PackageName(packageId, version);
+            var lookupPackageName = new PackageName(packageId, version);
             string packagePath;
-            if (_packagePathLookup.TryGetValue(packageName, out packagePath))
+            // If caching is enabled, check if we have a cached path. Additionally, verify that the file actually exists on disk since it might have moved.
+            if (_enableCaching && 
+                _packagePathLookup.TryGetValue(lookupPackageName, out packagePath) &&
+                FileSystem.FileExists(packagePath))
             {
-                yield return packagePath;
+                // When depending on the cached path, verify the file exists on disk.
+                return GetPackage(openPackage, packagePath);
             }
-            yield return GetPackageFilePath(packageId, version);
-            yield return PathResolver.GetPackageFileName(packageId, version);
+
+            // Lookup files which start with the name "<Id>." and attempt to match it with all possible version string combinations (e.g. 1.2.0, 1.2.0.0) 
+            // before opening the package. To avoid creating file name strings, we attempt to specifically match everything after the last path separator
+            // which would be the file name and extension.
+            return (from path in GetPackageLookupPaths(packageId, version)
+                    let package = GetPackage(openPackage, path)
+                    where lookupPackageName.Equals(new PackageName(package.Id, package.Version))
+                    select package).FirstOrDefault();
         }
 
         internal IEnumerable<IPackage> GetPackages(Func<string, IPackage> openPackage)
@@ -172,21 +198,24 @@ namespace NuGet
             return cacheEntry.Package;
         }
 
-        internal IEnumerable<string> GetPackageFiles()
+        internal IEnumerable<string> GetPackageFiles(string filter = null)
         {
+            filter = filter ?? "*" + Constants.PackageExtension;
+            Debug.Assert(filter.EndsWith(Constants.PackageExtension, StringComparison.OrdinalIgnoreCase));
+
             // Check for package files one level deep. We use this at package install time
             // to determine the set of installed packages. Installed packages are copied to 
             // {id}.{version}\{packagefile}.{extension}.
             foreach (var dir in FileSystem.GetDirectories(String.Empty))
             {
-                foreach (var path in FileSystem.GetFiles(dir, "*" + Constants.PackageExtension))
+                foreach (var path in FileSystem.GetFiles(dir, filter))
                 {
                     yield return path;
                 }
             }
 
             // Check top level directory
-            foreach (var path in FileSystem.GetFiles(String.Empty, "*" + Constants.PackageExtension))
+            foreach (var path in FileSystem.GetFiles(String.Empty, filter))
             {
                 yield return path;
             }
@@ -214,6 +243,18 @@ namespace NuGet
         {
             return Path.Combine(PathResolver.GetPackageDirectory(id, version),
                                 PathResolver.GetPackageFileName(id, version));
+        }
+
+        private static bool FileNameMatchesPattern(string packageId, SemanticVersion version, string path)
+        {
+            var name = Path.GetFileNameWithoutExtension(path);
+            SemanticVersion parsedVersion;
+
+            // When matching by pattern, we will always have a version token. Packages without versions would be matched early on by the version-less path resolver 
+            // when doing an exact match.
+            return name.Length > packageId.Length &&
+                   SemanticVersion.TryParse(name.Substring(packageId.Length + 1), out parsedVersion) &&
+                   parsedVersion == version;
         }
 
         private class PackageCacheEntry

@@ -164,9 +164,9 @@ namespace NuGet.Commands
             {
                 Console.WriteLine("Tags: {0}", package.Tags.Trim());
             }
-            if (package.Dependencies.Any())
+            if (package.DependencySets.Any())
             {
-                Console.WriteLine("Dependencies: {0}", String.Join(", ", package.Dependencies.Select(d => d.ToString())));
+                Console.WriteLine("Dependencies: {0}", String.Join(", ", package.DependencySets.SelectMany(d => d.Dependencies).Select(d => d.ToString())));
             }
             else
             {
@@ -337,7 +337,7 @@ namespace NuGet.Commands
             }
 
             // Create a builder for the main package as well as the sources/symbols package
-            PackageBuilder mainPackageBuilder = factory.CreateBuilder();
+            PackageBuilder mainPackageBuilder = factory.CreateBuilder(BasePath);
 
             // Build the main package
             IPackage package = BuildPackage(path, mainPackageBuilder);
@@ -352,7 +352,7 @@ namespace NuGet.Commands
             Console.WriteLine(NuGetResources.PackageCommandAttemptingToBuildSymbolsPackage, Path.GetFileName(path));
 
             factory.IncludeSymbols = true;
-            PackageBuilder symbolsBuilder = factory.CreateBuilder();
+            PackageBuilder symbolsBuilder = factory.CreateBuilder(BasePath);
             symbolsBuilder.Version = mainPackageBuilder.Version;
 
             // Get the file name for the sources package and build it

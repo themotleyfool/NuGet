@@ -16,7 +16,9 @@
     WindowStartupLocation="CenterOwner"
     resources:WindowSizePersistenceHelper.WindowToken="LicenseWindow"
     Title="{x:Static resources:Resources.License_DialogTitle}"
-    Background="{DynamicResource {x:Static resources:UIResources.WindowBackgroundBrushKey}}">
+    Background="{DynamicResource {x:Static resources:UIResources.WindowBackgroundBrushKey}}"
+    AutomationProperties.AutomationId="NuGetLicenseWindow"
+    >
     
     <Window.Resources>
         <Style TargetType="{x:Type Button}">
@@ -33,8 +35,8 @@
                     <Run Text=" " />
                     <Run Text="{Binding Authors, Mode=OneTime, StringFormat={x:Static resources:Resources.License_AuthorFormatString}, Converter={StaticResource authorNamesConverter}}" />
                 </TextBlock>
-                <TextBlock>
-                    <Hyperlink NavigateUri="{Binding LicenseUrl, Mode=OneTime}" RequestNavigate="OnViewLicenseTermsRequestNavigate">
+                <TextBlock AutomationProperties.AutomationId="{Binding Id, Mode=OneWay, StringFormat='LicenseTerm_{0}'}">
+                    <Hyperlink AutomationProperties.AutomationId="{Binding Id, Mode=OneWay, StringFormat='LicenseTermLink_{0}'}" NavigateUri="{Binding LicenseUrl, Mode=OneTime}" RequestNavigate="OnViewLicenseTermsRequestNavigate">
                         <Run Text="{x:Static resources:Resources.License_ViewLicense}" />
                     </Hyperlink>
                 </TextBlock>
@@ -46,8 +48,8 @@
         <TextBlock DockPanel.Dock="Top" Margin="0,3,0,3" Text="{x:Static resources:Resources.License_HeaderText}" TextWrapping="Wrap" />        
 
         <StackPanel DockPanel.Dock="Bottom" Margin="0,0,0,3" Orientation="Horizontal" HorizontalAlignment="Right">
-            <Button Content="{x:Static resources:Resources.License_Decline}" Click="OnDeclineButtonClick" IsCancel="True" />
-            <Button Content="{x:Static resources:Resources.License_Accept}" Click="OnAcceptButtonClick" />
+            <Button Content="{x:Static resources:Resources.License_Decline}" AutomationProperties.AutomationId="DeclineButton" Click="OnDeclineButtonClick" IsCancel="True" />
+            <Button Content="{x:Static resources:Resources.License_Accept}" AutomationProperties.AutomationId="AcceptButton" Click="OnAcceptButtonClick" />
         </StackPanel>
 
         <TextBlock DockPanel.Dock="Bottom" Margin="0,0,0,3" TextWrapping="Wrap" Text="{x:Static resources:Resources.License_LicenseText}" />

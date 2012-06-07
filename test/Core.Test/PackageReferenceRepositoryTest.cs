@@ -4,6 +4,9 @@ using System.Linq;
 using Moq;
 using NuGet.Test.Mocks;
 using Xunit;
+using System.Xml.Linq;
+using System.Collections.Generic;
+using System.Runtime.Versioning;
 
 namespace NuGet.Test
 {
@@ -67,9 +70,33 @@ namespace NuGet.Test
             // Assert
             Assert.Equal(@"C:\MockFileSystem\packages.config", path);
             Assert.True(fileSystem.FileExists("packages.config"));
-            Assert.Equal(@"<?xml version=""1.0"" encoding=""utf-8""?>
+            AssertConfig(@"<?xml version=""1.0"" encoding=""utf-8""?>
 <packages>
   <package id=""A"" version=""1.0"" />
+</packages>", fileSystem.ReadAllText("packages.config"));
+        }
+
+        [Fact]
+        public void AddPackageAddsEntryToPackagesConfigWithTargetFramework()
+        {
+            // Arrange
+            var sharedRepository = new Mock<ISharedPackageRepository>();
+            string path = null;
+            sharedRepository.Setup(m => m.RegisterRepository(It.IsAny<string>()))
+                            .Callback<string>(p => path = p);
+            var fileSystem = new MockFileSystem();
+            var referenceRepository = new PackageReferenceRepository(fileSystem, sharedRepository.Object);
+            //var package = PackageUtility.CreatePackage("A");
+
+            // Act
+            referenceRepository.AddPackage("A", new SemanticVersion("1.0"), new FrameworkName("Silverlight, Version=2.0"));
+
+            // Assert
+            Assert.Equal(@"C:\MockFileSystem\packages.config", path);
+            Assert.True(fileSystem.FileExists("packages.config"));
+            AssertConfig(@"<?xml version=""1.0"" encoding=""utf-8""?>
+<packages>
+  <package id=""A"" version=""1.0"" targetFramework=""sl20"" />
 </packages>", fileSystem.ReadAllText("packages.config"));
         }
 
@@ -91,7 +118,7 @@ namespace NuGet.Test
 
             // Assert
             Assert.True(fileSystem.FileExists("packages.config"));
-            Assert.Equal(@"<?xml version=""1.0"" encoding=""utf-8""?>
+            AssertConfig(@"<?xml version=""1.0"" encoding=""utf-8""?>
 <packages>
   <package id=""A"" version=""1.0"" />
 </packages>", fileSystem.ReadAllText("packages.config"));
@@ -117,7 +144,7 @@ namespace NuGet.Test
 
             // Assert
             Assert.True(fileSystem.FileExists("packages.config"));
-            Assert.Equal(@"<?xml version=""1.0"" encoding=""utf-8""?>
+            AssertConfig(@"<?xml version=""1.0"" encoding=""utf-8""?>
 <packages>
   <package id=""A"" version=""2.0"" allowedVersions=""[1.0, 5.0)"" />
 </packages>", fileSystem.ReadAllText("packages.config"));
@@ -142,7 +169,7 @@ namespace NuGet.Test
 
             // Assert
             Assert.True(fileSystem.FileExists("packages.config"));
-            Assert.Equal(@"<?xml version=""1.0"" encoding=""utf-8""?>
+            AssertConfig(@"<?xml version=""1.0"" encoding=""utf-8""?>
 <packages>
   <package id=""B"" version=""1.0"" />
 </packages>", fileSystem.ReadAllText("packages.config"));
@@ -173,7 +200,6 @@ namespace NuGet.Test
             Assert.Equal(@"C:\MockFileSystem\packages.config", path);
         }
 
-
         [Fact]
         public void GetPackagesReturnsPackagesFromSourceRepositoryListedInPackagesConfig()
         {
@@ -196,6 +222,70 @@ namespace NuGet.Test
             Assert.Equal(1, packages.Count);
             Assert.Same(packageA, packages[0]);
         }
+
+        [Fact]
+        public void GetPackageTargetFrameworkReturnsCorrectValue()
+        {
+            // Arrange
+            var repository = new Mock<MockPackageRepository>() { CallBase = true }.As<ISharedPackageRepository>();
+            var packageA = PackageUtility.CreatePackage("A");
+            repository.Object.AddPackage(packageA);
+            var fileSystem = new MockFileSystem();
+            fileSystem.AddFile("packages.config", @"<?xml version=""1.0"" encoding=""utf-8""?>
+<packages>
+  <package id=""A"" version=""1.0"" targetFramework=""winrt45"" />
+</packages>");
+            var referenceRepository = new PackageReferenceRepository(fileSystem, repository.Object);
+
+            // Act
+            var targetFramework = referenceRepository.GetPackageTargetFramework("A");
+
+            // Assert
+            Assert.Equal(new FrameworkName(".NETCore, Version=4.5"), targetFramework);
+        }
+
+        [Fact]
+        public void GetPackageTargetFrameworkReturnsNullIfTargetFrameworkAttributeIsNotPresent()
+        {
+            // Arrange
+            var repository = new Mock<MockPackageRepository>() { CallBase = true }.As<ISharedPackageRepository>();
+            var packageA = PackageUtility.CreatePackage("A");
+            repository.Object.AddPackage(packageA);
+            var fileSystem = new MockFileSystem();
+            fileSystem.AddFile("packages.config", @"<?xml version=""1.0"" encoding=""utf-8""?>
+<packages>
+  <package id=""A"" version=""1.0"" />
+</packages>");
+            var referenceRepository = new PackageReferenceRepository(fileSystem, repository.Object);
+
+            // Act
+            var targetFramework = referenceRepository.GetPackageTargetFramework("A");
+
+            // Assert
+            Assert.Null(targetFramework);
+        }
+
+        [Fact]
+        public void GetPackageTargetFrameworkReturnsNullIfPackageIdIsNotPresent()
+        {
+            // Arrange
+            var repository = new Mock<MockPackageRepository>() { CallBase = true }.As<ISharedPackageRepository>();
+            var packageA = PackageUtility.CreatePackage("A");
+            repository.Object.AddPackage(packageA);
+            var fileSystem = new MockFileSystem();
+            fileSystem.AddFile("packages.config", @"<?xml version=""1.0"" encoding=""utf-8""?>
+<packages>
+  <package id=""A"" version=""1.0"" />
+</packages>");
+            var referenceRepository = new PackageReferenceRepository(fileSystem, repository.Object);
+
+            // Act
+            var targetFramework = referenceRepository.GetPackageTargetFramework("B");
+
+            // Assert
+            Assert.Null(targetFramework);
+        }
+
 
         [Fact]
         public void GetConstraintReturnsConstraintListedForPackageIdInPackagesConfig()
@@ -318,16 +408,6 @@ namespace NuGet.Test
         }
 
         [Fact]
-        public void PackageReferenceRepositoryImplementsILatestPackageLookupInterface()
-        {
-            // Arrange
-            var repository = new PackageReferenceRepository(new Mock<IFileSystem>().Object, new Mock<ISharedPackageRepository>().Object);
-
-            // Assert
-            Assert.True(repository is ILatestPackageLookup);
-        }
-
-        [Fact]
         public void PackageReferenceRepositoryImplementsILatestPackageLookupInterfaceCorrectly()
         {
             // Arrange
@@ -433,6 +513,14 @@ namespace NuGet.Test
             // Assert
             Assert.False(result);
             Assert.Null(latestVersion);
+        }
+
+        private static void AssertConfig(string expected, string actual)
+        {
+            Assert.Equal(expected.Where(c => !Char.IsWhiteSpace(c)), actual.Where(c => !Char.IsWhiteSpace(c)));
+            
+            // Verify the actual document is parseable as an xml
+            XDocument.Load(new StringReader(actual));
         }
     }
 }

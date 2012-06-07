@@ -25,7 +25,9 @@
     dialogServices:WindowSizePersistenceHelper.WindowToken="MainWindow"
     Loaded="OnDialogWindowLoaded"
     Closing="OnDialogWindowClosing"
-    Closed="OnDialogWindowClosed">
+    Closed="OnDialogWindowClosed"
+    AutomationProperties.AutomationId="NuGetMainWindow"
+    >
     
     <Window.Resources>
         <ResourceDictionary>
@@ -110,7 +112,8 @@
                 <ColumnDefinition />
             </Grid.ColumnDefinitions>
 
-            <Button 
+            <Button
+                AutomationProperties.AutomationId="SettingsButton"
                 Grid.Column="0"
                 HorizontalAlignment="Left"
                 VerticalAlignment="Center"
@@ -122,6 +125,7 @@
                 Content="{x:Static resources:Resources.Dialog_Settings}" />
 
             <Button 
+                AutomationProperties.AutomationId="CloseButton"
                 Grid.Column="1"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Center"

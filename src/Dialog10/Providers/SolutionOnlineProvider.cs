@@ -50,64 +50,98 @@ namespace NuGet.Dialog.Providers
         protected override bool ExecuteCore(PackageItem item)
         {
             _activePackageManager = GetActivePackageManager();
-            IList<Project> selectedProjectsList;
+            using (_activePackageManager.SourceRepository.StartOperation(RepositoryOperationNames.Install))
+            {
+                IList<Project> selectedProjectsList;
 
+                ShowProgressWindow();
+                bool isProjectLevel = _activePackageManager.IsProjectLevel(item.PackageIdentity);
+                if (isProjectLevel)
+                {
+                    HideProgressWindow();
+                    var selectedProjects = _userNotifierServices.ShowProjectSelectorWindow(
+                        Resources.Dialog_OnlineSolutionInstruction,
+                        item.PackageIdentity,
+                        DetermineProjectCheckState,
+                        ignored => true);
+                    if (selectedProjects == null)
+                    {
+                        // user presses Cancel button on the Solution dialog
+                        return false;
+                    }
+
+                    selectedProjectsList = selectedProjects.ToList();
+                    if (selectedProjectsList.Count == 0)
+                    {
+                        return false;
+                    }
+
+                    // save the checked state of projects so that we can restore them the next time
+                    SaveProjectCheckStates(selectedProjectsList);
+                }
+                else
+                {
+                    // solution package. just install into the solution
+                    selectedProjectsList = new Project[0];
+                }
+
+                IList<PackageOperation> operations;
+                bool acceptLicense = isProjectLevel ? CheckPSScriptAndShowLicenseAgreement(item, selectedProjectsList, _activePackageManager, out operations)
+                                                    : CheckPSScriptAndShowLicenseAgreement(item, _activePackageManager, out operations);
+                if (!acceptLicense)
+                {
+                    return false;
+                }
+
+                try
+                {
+                    RegisterPackageOperationEvents(_activePackageManager, null);
+
+                    _activePackageManager.InstallPackage(
+                        selectedProjectsList,
+                        item.PackageIdentity,
+                        operations,
+                        ignoreDependencies: false,
+                        allowPrereleaseVersions: IncludePrerelease,
+                        logger: this,
+                        eventListener: this);
+                }
+                finally
+                {
+                    UnregisterPackageOperationEvents(_activePackageManager, null);
+                }
+
+                return true;
+            }
+        }
+
+        protected bool CheckPSScriptAndShowLicenseAgreement(
+            PackageItem item, IList<Project> projects, IVsPackageManager packageManager, out IList<PackageOperation> operations)
+        {
             ShowProgressWindow();
-            if (_activePackageManager.IsProjectLevel(item.PackageIdentity))
+
+            // combine the operations of all selected project
+            var allOperations = new List<PackageOperation>();
+            foreach (Project project in projects)
             {
-                HideProgressWindow();
-                var selectedProjects = _userNotifierServices.ShowProjectSelectorWindow(
-                    Resources.Dialog_OnlineSolutionInstruction,
+                IProjectManager projectManager = packageManager.GetProjectManager(project);
+
+                IList<PackageOperation> projectOperations;
+                CheckInstallPSScripts(
                     item.PackageIdentity,
-                    DetermineProjectCheckState,
-                    ignored => true);
-                if (selectedProjects == null)
-                {
-                    // user presses Cancel button on the Solution dialog
-                    return false;
-                }
+                    projectManager.LocalRepository,
+                    packageManager.SourceRepository,
+                    project.GetTargetFrameworkName(),
+                    IncludePrerelease,
+                    out projectOperations);
 
-                selectedProjectsList = selectedProjects.ToList();
-                if (selectedProjectsList.Count == 0)
-                {
-                    return false;
-                }
-
-                // save the checked state of projects so that we can restore them the next time
-                SaveProjectCheckStates(selectedProjectsList);
-            }
-            else
-            {
-                // solution package. just install into the solution
-                selectedProjectsList = new Project[0];
+                allOperations.AddRange(projectOperations);
             }
 
-            IList<PackageOperation> operations;
-            bool acceptLicense = CheckPSScriptAndShowLicenseAgreement(item, _activePackageManager, out operations);
-            if (!acceptLicense)
-            {
-                return false;
-            }
+            // reduce the operations before checking for license agreements
+            operations = allOperations.Reduce();
 
-            try
-            {
-                RegisterPackageOperationEvents(_activePackageManager, null);
-
-                _activePackageManager.InstallPackage(
-                    selectedProjectsList,
-                    item.PackageIdentity,
-                    operations,
-                    ignoreDependencies: false,
-                    allowPrereleaseVersions: IncludePrerelease,
-                    logger: this,
-                    eventListener: this);
-            }
-            finally
-            {
-                UnregisterPackageOperationEvents(_activePackageManager, null);
-            }
-
-            return true;
+            return ShowLicenseAgreement(packageManager, operations);
         }
 
         private void SaveProjectCheckStates(IList<Project> selectedProjects)

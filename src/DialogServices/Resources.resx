@@ -330,4 +330,22 @@
   <data name="Filter_StablePackages" xml:space="preserve">
     <value>Stable Only</value>
   </data>
+  <data name="Dialog_PackagePrereleaseLabel" xml:space="preserve">
+    <value>Prerelease</value>
+  </data>
+  <data name="Visualizer_PackageDependency" xml:space="preserve">
+    <value>Package Dependency</value>
+  </data>
+  <data name="Visualizer_InstalledPackage" xml:space="preserve">
+    <value>Installed Package</value>
+  </data>
+  <data name="Visualizer_Package" xml:space="preserve">
+    <value>Package</value>
+  </data>
+  <data name="Visualizer_Project" xml:space="preserve">
+    <value>Project</value>
+  </data>
+  <data name="NoFxDependencyGroup" xml:space="preserve">
+    <value>(not framework specific)</value>
+  </data>
 </root>

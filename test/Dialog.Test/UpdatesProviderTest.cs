@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.ComponentModel;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Threading;
 using EnvDTE;
 using Microsoft.VisualStudio.ExtensionsExplorer;
@@ -200,6 +201,8 @@ namespace NuGet.Dialog.Test
             provider.ExecuteCompletedCallback = delegate
             {
                 // Assert
+                Assert.Equal(RepositoryOperationNames.Update, sourceRepository.LastOperation);
+
                 mockWindowServices.Verify(p => p.ShowLicenseWindow(It.IsAny<IEnumerable<IPackage>>()), Times.Never());
                 packageManager.Verify(p => p.UpdatePackage(projectManager.Object, packageA2, It.IsAny<IEnumerable<PackageOperation>>(), true, includePrerelease, provider), Times.Once());
 
@@ -264,8 +267,8 @@ namespace NuGet.Dialog.Test
                 // Assert
                 try
                 {
-                    scriptExecutor.Verify(p => p.Execute(It.IsAny<string>(), "uninstall.ps1", packageA1, project.Object, It.IsAny<ILogger>()), Times.Once());
-                    scriptExecutor.Verify(p => p.Execute(It.IsAny<string>(), "install.ps1", packageA2, project.Object, It.IsAny<ILogger>()), Times.Once());
+                    scriptExecutor.Verify(p => p.Execute(It.IsAny<string>(), "uninstall.ps1", packageA1, project.Object, It.IsAny<FrameworkName>(), It.IsAny<ILogger>()), Times.Once());
+                    scriptExecutor.Verify(p => p.Execute(It.IsAny<string>(), "install.ps1", packageA2, project.Object, It.IsAny<FrameworkName>(), It.IsAny<ILogger>()), Times.Once());
                 }
                 finally
                 {

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Xml.Linq;
 using Xunit;
+using System.Runtime.Versioning;
 
 namespace NuGet.Test
 {
@@ -127,8 +128,14 @@ namespace NuGet.Test
                     Version = "1.0",
                     Authors = "test-author",
                     Description = "desc",
-                    Dependencies = new List<ManifestDependency> {
-                        new ManifestDependency { Id = null }
+                    DependencySets = new List<ManifestDependencySet> {
+                            new ManifestDependencySet {
+                                TargetFramework = null,
+                                Dependencies = new List<ManifestDependency> 
+                                    {
+                                        new ManifestDependency { Id = null }
+                                    }
+                            }
                     }
                 }
             };
@@ -184,7 +191,15 @@ namespace NuGet.Test
                     Copyright = "Copyright 2012",
                     Language = "fr-FR",
                     Tags = "Test Unit",
-                    Dependencies = new List<ManifestDependency> { new ManifestDependency { Id = "Test", Version = "1.2.0" } },
+                    DependencySets = new List<ManifestDependencySet> {
+                            new ManifestDependencySet {
+                                TargetFramework = null,
+                                Dependencies = new List<ManifestDependency> 
+                                    {
+                                        new ManifestDependency { Id = "Test", Version = "1.2.0" }
+                                    }
+                            }
+                    },
                     FrameworkAssemblies = new List<ManifestFrameworkAssembly> { new ManifestFrameworkAssembly { AssemblyName = "System.Data", TargetFramework = "4.0" } },
                     References = new List<ManifestReference> { new ManifestReference { File = "Test.dll" } }
                 }
@@ -223,6 +238,100 @@ namespace NuGet.Test
             AssertManifest(expectedManifest, manifest);
         }
 
+        [Fact]
+        public void ManifestGroupDependencySetsByTargetFrameworkAndPutNullFrameworkFirst()
+        {
+            // Arrange
+            var manifest = new Manifest
+            {
+                Metadata = new ManifestMetadata
+                {
+                    Id = "Foobar",
+                    Version = "1.0",
+                    Authors = "test-author",
+                    Description = "desc",
+                    DependencySets = new List<ManifestDependencySet> {
+                            new ManifestDependencySet {
+                                TargetFramework = ".NETFramework40",
+                                Dependencies = new List<ManifestDependency> 
+                                    {
+                                        new ManifestDependency { Id = "B" }
+                                    }
+                            },
+
+                            new ManifestDependencySet {
+                                TargetFramework = null,
+                                Dependencies = new List<ManifestDependency> 
+                                    {
+                                        new ManifestDependency { Id = "A" }
+                                    }
+                            },
+
+                            new ManifestDependencySet {
+                                TargetFramework = null,
+                                Dependencies = new List<ManifestDependency> 
+                                    {
+                                        new ManifestDependency { Id = "C" }
+                                    }
+                            },
+
+                            new ManifestDependencySet {
+                                TargetFramework = "Silverlight35",
+                                Dependencies = new List<ManifestDependency> 
+                                    {
+                                        new ManifestDependency { Id = "D" }
+                                    }
+                            },
+
+                            new ManifestDependencySet {
+                                TargetFramework = "net40",
+                                Dependencies = new List<ManifestDependency> 
+                                    {
+                                        new ManifestDependency { Id = "E" }
+                                    }
+                            },
+
+                            new ManifestDependencySet {
+                                TargetFramework = "sl35",
+                                Dependencies = new List<ManifestDependency> 
+                                    {
+                                        new ManifestDependency { Id = "F" }
+                                    }
+                            },
+
+                            new ManifestDependencySet {
+                                TargetFramework = "winrt45",
+                                Dependencies = new List<ManifestDependency>() 
+                            },
+                    }
+                }
+            };
+
+            // Act
+            var dependencySets = ((IPackageMetadata)manifest.Metadata).DependencySets.ToList();
+
+            // Assert
+            Assert.Equal(4, dependencySets.Count);
+
+            Assert.Null(dependencySets[0].TargetFramework);
+            Assert.Equal(2, dependencySets[0].Dependencies.Count);
+            Assert.Equal("A", dependencySets[0].Dependencies.First().Id);
+            Assert.Equal("C", dependencySets[0].Dependencies.Last().Id);
+
+            Assert.Equal(new FrameworkName(".NETFramework, Version=4.0"), dependencySets[1].TargetFramework);
+            Assert.Equal(2, dependencySets[1].Dependencies.Count);
+            Assert.Equal("B", dependencySets[1].Dependencies.First().Id);
+            Assert.Equal("E", dependencySets[1].Dependencies.Last().Id);
+
+            Assert.Equal(new FrameworkName("Silverlight, Version=3.5"), dependencySets[2].TargetFramework);
+            Assert.Equal(2, dependencySets[2].Dependencies.Count);
+            Assert.Equal("D", dependencySets[2].Dependencies.First().Id);
+            Assert.Equal("F", dependencySets[2].Dependencies.Last().Id);
+
+            Assert.Equal(new FrameworkName(".NETCore, Version=4.5"), dependencySets[3].TargetFramework);
+            Assert.Equal(0, dependencySets[3].Dependencies.Count);
+        }
+
 
         private void AssertManifest(Manifest expected, Manifest actual)
         {
@@ -241,11 +350,11 @@ namespace NuGet.Test
             Assert.Equal(expected.Metadata.Summary, actual.Metadata.Summary);
             Assert.Equal(expected.Metadata.Tags, actual.Metadata.Tags);
 
-            if (expected.Metadata.Dependencies != null)
+            if (expected.Metadata.DependencySets != null)
             {
-                for (int i = 0; i < expected.Metadata.Dependencies.Count; i++)
+                for (int i = 0; i < expected.Metadata.DependencySets.Count; i++)
                 {
-                    AssertDependency(expected.Metadata.Dependencies[i], actual.Metadata.Dependencies[i]);
+                    AssertDependencySet(expected.Metadata.DependencySets[i], actual.Metadata.DependencySets[i]);
                 }
             }
             if (expected.Metadata.FrameworkAssemblies != null)
@@ -276,6 +385,16 @@ namespace NuGet.Test
             Assert.Equal(expected.Source, actual.Source);
             Assert.Equal(expected.Target, actual.Target);
             Assert.Equal(expected.Exclude, actual.Exclude);
+        }
+
+        private static void AssertDependencySet(ManifestDependencySet expected, ManifestDependencySet actual)
+        {
+            Assert.Equal(expected.TargetFramework, actual.TargetFramework);
+            Assert.Equal(expected.Dependencies.Count, actual.Dependencies.Count);
+            for (int i = 0; i < expected.Dependencies.Count; i++)
+            {
+                AssertDependency(expected.Dependencies[i], actual.Dependencies[i]);
+            }
         }
 
         private static void AssertDependency(ManifestDependency expected, ManifestDependency actual)

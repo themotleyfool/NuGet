@@ -49,6 +49,7 @@
     <Compile Include="PackageRestore\PackagesMissingStatusEventArgs.cs" />
     <Compile Include="PackageSource\AggregatePackageSource.cs" />
     <Compile Include="PackageSource\IVsPackageSourceProvider.cs" />
+    <Compile Include="PowershellScripts.cs" />
     <Compile Include="ProductUpdate\IProductUpdateService.cs" />
     <Compile Include="ProductUpdate\IProductUpdateSettings.cs" />
     <Compile Include="ProductUpdate\IUpdateWorker.cs" />
@@ -71,6 +72,7 @@
     <Compile Include="RegistryKeyWrapper.cs" />
     <Compile Include="SkipAssemblyReferencesPackage.cs" />
     <Compile Include="SolutionFolderFileSystem.cs" />
+    <Compile Include="TfsSourceControlFileSystemProviderPicker.cs" />
     <Compile Include="Utility\PathHelper.cs" />
     <Compile Include="Utility\SourceControlHelper.cs" />
     <Compile Include="Utility\UriHelper.cs" />
@@ -115,7 +117,6 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="Microsoft.VisualStudio.ExtensionManager, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
-    <Reference Include="Microsoft.VisualStudio.ExtensionManager.Implementation, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
     <Reference Include="Microsoft.VisualStudio.ExtensionsExplorer, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
     <Reference Include="EnvDTE, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
       <EmbedInteropTypes>True</EmbedInteropTypes>
@@ -170,7 +171,6 @@
     <Compile Include="OutputConsole\OutputConsole.cs" />
     <Compile Include="OutputConsole\OutputConsoleProvider.cs" />
     <Compile Include="Extensions\PackageExtensions.cs" />
-    <Compile Include="PowerShellScripts.cs" />
     <Compile Include="ProjectSystems\FSharpProjectSystem.cs" />
     <Compile Include="PSScriptExecutor.cs" />
     <Compile Include="RecentRepository\IPersistencePackageSettingsManager.cs" />

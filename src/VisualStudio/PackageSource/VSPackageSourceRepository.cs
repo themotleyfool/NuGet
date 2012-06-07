@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Linq;
+using System.Runtime.Versioning;
 using NuGet.VisualStudio.Resources;
 
 namespace NuGet.VisualStudio
 {
     [Export(typeof(IPackageRepository))]
-    public class VsPackageSourceRepository : IPackageRepository, ISearchableRepository, ICloneableRepository, IPackageLookup
+    public class VsPackageSourceRepository : IPackageRepository, IServiceBasedRepository, ICloneableRepository, IPackageLookup
     {
         private readonly IVsPackageSourceProvider _packageSourceProvider;
         private readonly IPackageRepositoryFactory _repositoryFactory;
@@ -59,6 +60,12 @@ namespace NuGet.VisualStudio
             return activeRepository == null ? null : activeRepository.FindPackage(packageId, version);
         }
 
+        public bool Exists(string packageId, SemanticVersion version)
+        {
+            var activeRepository = GetActiveRepository();
+            return activeRepository != null ? activeRepository.Exists(packageId, version) : false;
+        }
+
         public void AddPackage(IPackage package)
         {
             var activeRepository = GetActiveRepository();
@@ -104,6 +111,16 @@ namespace NuGet.VisualStudio
                 return Enumerable.Empty<IPackage>();
             }
             return activeRepository.FindPackagesById(packageId);
+        }
+
+        public IEnumerable<IPackage> GetUpdates(IEnumerable<IPackage> packages, bool includePrerelease, bool includeAllVersions, IEnumerable<FrameworkName> targetFramework)
+        {
+            var activeRepository = GetActiveRepository();
+            if (activeRepository == null)
+            {
+                return Enumerable.Empty<IPackage>();
+            }
+            return activeRepository.GetUpdates(packages, includePrerelease, includeAllVersions, targetFramework);
         }
 
         internal IPackageRepository GetActiveRepository()

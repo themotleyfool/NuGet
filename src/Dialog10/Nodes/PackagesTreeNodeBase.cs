@@ -219,7 +219,7 @@ namespace NuGet.Dialog.Providers
         /// <summary>
         /// Refresh the list of packages belong to this node
         /// </summary>
-        public void Refresh(bool resetQueryBeforeRefresh = false)
+        public virtual void Refresh(bool resetQueryBeforeRefresh = false)
         {
             if (resetQueryBeforeRefresh)
             {
@@ -263,7 +263,6 @@ namespace NuGet.Dialog.Providers
                     String.Format(CultureInfo.CurrentCulture, CommonResources.Argument_Must_Be_GreaterThanOrEqualTo, 1));
             }
 
-            Debug.WriteLine("Dialog loading page: " + pageNumber);
             if (_loadingInProgress)
             {
                 return;
@@ -337,14 +336,7 @@ namespace NuGet.Dialog.Providers
 
                 if (CollapseVersions)
                 {
-                    if (Provider.IncludePrerelease && SupportsPrereleasePackages)
-                    {
-                        query = query.Where(p => p.IsAbsoluteLatestVersion);
-                    }
-                    else
-                    {
-                        query = query.Where(p => p.IsLatestVersion);
-                    }
+                    query = CollapsePackageVersions(query);
                 }
 
                 token.ThrowIfCancellationRequested();
@@ -384,6 +376,18 @@ namespace NuGet.Dialog.Providers
             token.ThrowIfCancellationRequested();
 
             return new LoadPageResult(packages, pageNumber, _totalCount);
+        }
+
+        protected virtual IQueryable<IPackage> CollapsePackageVersions(IQueryable<IPackage> packages)
+        {
+            if (Provider.IncludePrerelease && SupportsPrereleasePackages)
+            {
+                return packages.Where(p => p.IsAbsoluteLatestVersion);
+            }
+            else
+            {
+                return packages.Where(p => p.IsLatestVersion);
+            }
         }
 
         private IOrderedQueryable<IPackage> ApplyOrdering(IQueryable<IPackage> query)

@@ -1,13 +1,14 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using NuGet;
+using System.Runtime.Versioning;
+using System;
 
 namespace NuGet.VisualStudio
 {
     /// <summary>
     /// Represents a package repository that implements a dependency provider. 
     /// </summary>
-    public class FallbackRepository : IPackageRepository, IDependencyResolver, ISearchableRepository, IPackageLookup
+    public class FallbackRepository : IPackageRepository, IDependencyResolver, IServiceBasedRepository, IPackageLookup, IOperationAwareRepository
     {
         private readonly IPackageRepository _primaryRepository;
         private readonly IPackageRepository _dependencyResolver;
@@ -73,9 +74,24 @@ namespace NuGet.VisualStudio
             return _primaryRepository.FindPackagesById(packageId);
         }
 
+        public IEnumerable<IPackage> GetUpdates(IEnumerable<IPackage> packages, bool includePrerelease, bool includeAllVersions, IEnumerable<FrameworkName> targetFramework)
+        {
+            return _primaryRepository.GetUpdates(packages, includePrerelease, includeAllVersions, targetFramework);
+        }
+
         public IPackage FindPackage(string packageId, SemanticVersion version)
         {
             return _primaryRepository.FindPackage(packageId, version);
+        }
+
+        public bool Exists(string packageId, SemanticVersion version)
+        {
+            return _primaryRepository.Exists(packageId, version);
+        }
+
+        public IDisposable StartOperation(string operation)
+        {
+            return SourceRepository.StartOperation(operation);
         }
     }
 }

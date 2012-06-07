@@ -10,6 +10,8 @@ namespace NuGet.Dialog.Providers
 {
     internal class UpdatesProvider : OnlineProvider
     {
+        private readonly Project _project;
+
         public UpdatesProvider(
             Project project,
             IPackageRepository localRepository,
@@ -31,6 +33,7 @@ namespace NuGet.Dialog.Providers
                 progressProvider,
                 solutionManager)
         {
+            _project = project;
         }
 
         public override string Name
@@ -54,6 +57,14 @@ namespace NuGet.Dialog.Providers
             get
             {
                 return true;
+            }
+        }
+
+        public override string OperationName
+        {
+            get
+            {
+                return RepositoryOperationNames.Update;
             }
         }
 
@@ -98,7 +109,8 @@ namespace NuGet.Dialog.Providers
         {
             return new PackageItem(this, package, isUpdateItem: true)
             {
-                CommandName = Resources.Dialog_UpdateButton
+                CommandName = Resources.Dialog_UpdateButton,
+                TargetFramework = _project.GetTargetFrameworkName()
             };
         }
 

@@ -18,7 +18,6 @@ namespace NuGet.Dialog.Providers
         private readonly IPackageRepositoryFactory _packageRepositoryFactory;
         private readonly IPackageSourceProvider _packageSourceProvider;
         private readonly IVsPackageManagerFactory _packageManagerFactory;
-        private readonly ProviderServices _providerServices;
         private readonly Project _project;
 
         public OnlineProvider(
@@ -37,7 +36,6 @@ namespace NuGet.Dialog.Providers
             _packageRepositoryFactory = packageRepositoryFactory;
             _packageSourceProvider = packageSourceProvider;
             _packageManagerFactory = packageManagerFactory;
-            _providerServices = providerServices;
             _project = project;
         }
 
@@ -70,9 +68,14 @@ namespace NuGet.Dialog.Providers
         {
             get
             {
-                string targetFramework = GetTargetFramework(_project);
+                string targetFramework = _project.GetTargetFramework();
                 return targetFramework != null ? new[] { targetFramework } : new string[0];
             }
+        }
+
+        public virtual string OperationName
+        {
+            get { return RepositoryOperationNames.Install; }
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage(
@@ -136,42 +139,32 @@ namespace NuGet.Dialog.Providers
             IVsPackageManager activePackageManager = GetActivePackageManager();
             Debug.Assert(activePackageManager != null);
 
-            IList<PackageOperation> operations;
-            bool acceptLicense = CheckPSScriptAndShowLicenseAgreement(item, activePackageManager, out operations);
-            if (!acceptLicense)
+            using (activePackageManager.SourceRepository.StartOperation(OperationName))
             {
-                return false;
-            }
+                IList<PackageOperation> operations;
+                bool acceptLicense = CheckPSScriptAndShowLicenseAgreement(item, activePackageManager, out operations);
+                if (!acceptLicense)
+                {
+                    return false;
+                }
 
-            ExecuteCommandOnProject(_project, item, activePackageManager, operations);
-            return true;
+                ExecuteCommandOnProject(_project, item, activePackageManager, operations);
+                return true;
+            }
         }
 
         protected bool CheckPSScriptAndShowLicenseAgreement(PackageItem item, IVsPackageManager packageManager, out IList<PackageOperation> operations)
         {
             ShowProgressWindow();
 
-            CheckInstallPSScripts(item.PackageIdentity, packageManager.SourceRepository, IncludePrerelease, out operations);
-            var licensePackages = from o in operations
-                                  where o.Action == PackageAction.Install && o.Package.RequireLicenseAcceptance && !packageManager.LocalRepository.Exists(o.Package)
-                                  select o.Package;
+            CheckInstallPSScripts(
+                item.PackageIdentity, 
+                packageManager.SourceRepository,
+                _project.GetTargetFrameworkName(),
+                IncludePrerelease, 
+                out operations);
 
-            // display license window if necessary
-            if (licensePackages.Any())
-            {
-                // hide the progress window if we are going to show license window
-                HideProgressWindow();
-
-                bool accepted = _providerServices.UserNotifierServices.ShowLicenseWindow(licensePackages);
-                if (!accepted)
-                {
-                    return false;
-                }
-
-                ShowProgressWindow();
-            }
-
-            return true;
+            return ShowLicenseAgreement(packageManager, operations);
         }
 
         protected void ExecuteCommandOnProject(Project activeProject, PackageItem item, IVsPackageManager activePackageManager, IList<PackageOperation> operations)
@@ -219,7 +212,8 @@ namespace NuGet.Dialog.Providers
         {
             return new PackageItem(this, package)
             {
-                CommandName = Resources.Dialog_InstallButton
+                CommandName = Resources.Dialog_InstallButton,
+                TargetFramework = _project.GetTargetFrameworkName()
             };
         }
 

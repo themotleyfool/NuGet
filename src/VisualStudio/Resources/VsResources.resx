@@ -314,4 +314,10 @@ Packages installed into Website projects will not be restored during build. Cons
   <data name="VisualStudioExpressForWindows8SourceName" xml:space="preserve">
     <value>Windows 8 Packages</value>
   </data>
+  <data name="PackageRestoreProgressMessage" xml:space="preserve">
+    <value>Downloading missing packages...</value>
+  </data>
+  <data name="TemplateWizard_VersionConflict" xml:space="preserve">
+    <value>Attempting to install version '{1}' of '{0}' but the project already includes a different version. Skipping...</value>
+  </data>
 </root>

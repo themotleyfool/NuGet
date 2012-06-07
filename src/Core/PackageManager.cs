@@ -1,12 +1,15 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Linq;
+using System.Runtime.Versioning;
 using NuGet.Resources;
 
 namespace NuGet
 {
     public class PackageManager : IPackageManager
     {
+        private readonly SatellitePackageManager _satellitePackageManager;
         private ILogger _logger;
 
         public event EventHandler<PackageOperationEventArgs> PackageInstalling;
@@ -47,6 +50,7 @@ namespace NuGet
             PathResolver = pathResolver;
             FileSystem = fileSystem;
             LocalRepository = localRepository;
+            _satellitePackageManager = new SatellitePackageManager(localRepository, fileSystem, pathResolver);
         }
 
         public IFileSystem FileSystem
@@ -85,6 +89,11 @@ namespace NuGet
             }
         }
 
+        protected SatellitePackageManager SatellitePackageManager
+        {
+            get { return _satellitePackageManager; }
+        }
+
         public void InstallPackage(string packageId)
         {
             InstallPackage(packageId, version: null, ignoreDependencies: false, allowPrereleaseVersions: false);
@@ -104,8 +113,14 @@ namespace NuGet
 
         public virtual void InstallPackage(IPackage package, bool ignoreDependencies, bool allowPrereleaseVersions)
         {
+            InstallPackage(package, targetFramework: null, ignoreDependencies: ignoreDependencies, allowPrereleaseVersions: allowPrereleaseVersions);
+        }
+
+        protected void InstallPackage(IPackage package, FrameworkName targetFramework, bool ignoreDependencies, bool allowPrereleaseVersions)
+        {
             Execute(package, new InstallWalker(LocalRepository,
                                                SourceRepository,
+                                               targetFramework,
                                                Logger,
                                                ignoreDependencies,
                                                allowPrereleaseVersions));
@@ -191,13 +206,7 @@ namespace NuGet
                 FileSystem.AddFiles(files, packageDirectory);
 
                 // If this is a Satellite Package, then copy the satellite files into the related runtime package folder too
-                IPackage runtimePackage;
-                if (PackageUtility.IsSatellitePackage(package, LocalRepository, out runtimePackage))
-                {
-                    var satelliteFiles = package.GetSatelliteFiles();
-                    var runtimePath = PathResolver.GetPackageDirectory(runtimePackage);
-                    FileSystem.AddFiles(satelliteFiles, runtimePath);
-                }
+                _satellitePackageManager.ExpandSatellitePackage(package);
             }
             finally
             {
@@ -255,10 +264,11 @@ namespace NuGet
         public virtual void UninstallPackage(IPackage package, bool forceRemove, bool removeDependencies)
         {
             Execute(package, new UninstallWalker(LocalRepository,
-                                                 new DependentsWalker(LocalRepository),
-                                                 Logger,
-                                                 removeDependencies,
-                                                 forceRemove));
+                                                 new DependentsWalker(LocalRepository, targetFramework: null),
+                                                 targetFramework: null,
+                                                 logger: Logger,
+                                                 removeDependencies: removeDependencies,
+                                                 forceRemove: forceRemove));
         }
 
         protected virtual void ExecuteUninstall(IPackage package)
@@ -284,18 +294,10 @@ namespace NuGet
         {
             string packageDirectory = PathResolver.GetPackageDirectory(package);
 
+            _satellitePackageManager.RemoveSatelliteReferences(package);
+
             // Remove resource files
             FileSystem.DeleteFiles(package.GetFiles(), packageDirectory);
-
-            // If this is a Satellite Package, then remove the files from the related runtime package folder too
-            IPackage runtimePackage;
-            if (PackageUtility.IsSatellitePackage(package, LocalRepository, out runtimePackage))
-            {
-                var satelliteFiles = package.GetSatelliteFiles();
-                var runtimePath = PathResolver.GetPackageDirectory(runtimePackage);
-                FileSystem.DeleteFiles(satelliteFiles, runtimePath);
-            }
-
         }
 
         private void OnInstalling(PackageOperationEventArgs e)
@@ -375,7 +377,9 @@ namespace NuGet
 
             if (newPackage != null && oldPackage.Version != newPackage.Version)
             {
+                var satelliteReferences = SatellitePackageManager.GetSatelliteReferences(oldPackage);
                 UpdatePackage(newPackage, updateDependencies, allowPrereleaseVersions);
+                SatellitePackageManager.ExpandSatellitePackages(satelliteReferences);
             }
             else
             {
@@ -387,11 +391,12 @@ namespace NuGet
         {
             Execute(newPackage, new UpdateWalker(LocalRepository,
                                                 SourceRepository,
-                                                new DependentsWalker(LocalRepository),
+                                                new DependentsWalker(LocalRepository, targetFramework: null),
                                                 NullConstraintProvider.Instance,
-                                                Logger,
-                                                updateDependencies,
-                                                allowPrereleaseVersions));
+                                                targetFramework: null,
+                                                logger: Logger,
+                                                updateDependencies: updateDependencies,
+                                                allowPrereleaseVersions: allowPrereleaseVersions));
         }
     }
 }

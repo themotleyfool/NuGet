@@ -4,11 +4,22 @@ using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Runtime.Versioning;
 
 namespace NuGet
 {
     public static class PackageRepositoryExtensions
     {
+        public static IDisposable StartOperation(this IPackageRepository self, string operation)
+        {
+            IOperationAwareRepository repo = self as IOperationAwareRepository;
+            if (repo != null)
+            {
+                return repo.StartOperation(operation);
+            }
+            return DisposableAction.NoOp;
+        }
+
         public static bool Exists(this IPackageRepository repository, IPackageMetadata package)
         {
             return repository.Exists(package.Id, package.Version);
@@ -21,12 +32,11 @@ namespace NuGet
 
         public static bool Exists(this IPackageRepository repository, string packageId, SemanticVersion version)
         {
-            var existenceLookup = repository as IFastExistenceLookup;
-            if (!String.IsNullOrEmpty(packageId) && (version != null) && (existenceLookup != null))
+            IPackageLookup packageLookup = repository as IPackageLookup;
+            if ((packageLookup != null) && !String.IsNullOrEmpty(packageId) && (version != null))
             {
-                return existenceLookup.Exists(packageId, version);
-            }   
-
+                return packageLookup.Exists(packageId, version);
+            }
             return repository.FindPackage(packageId, version) != null;
         }
 
@@ -134,10 +144,10 @@ namespace NuGet
 
         public static IEnumerable<IPackage> FindPackagesById(this IPackageRepository repository, string packageId)
         {
-            var findPackagesRepository = repository as ISearchableRepository;
-            if (findPackagesRepository != null)
+            var serviceBasedRepository = repository as IServiceBasedRepository;
+            if (serviceBasedRepository != null)
             {
-                return findPackagesRepository.FindPackagesById(packageId).ToList();
+                return serviceBasedRepository.FindPackagesById(packageId).ToList();
             }
             else
             {
@@ -236,11 +246,12 @@ namespace NuGet
                                                                    IPackageConstraintProvider constraintProvider,
                                                                    IEnumerable<string> packageIds,
                                                                    IPackage package,
+                                                                   FrameworkName targetFramework,
                                                                    bool allowPrereleaseVersions)
         {
             return (from p in repository.FindPackages(packageIds)
                     where allowPrereleaseVersions || p.IsReleaseVersion()
-                    let dependency = p.FindDependency(package.Id)
+                    let dependency = p.FindDependency(package.Id, targetFramework)
                     let otherConstaint = constraintProvider.GetConstraint(p.Id)
                     where dependency != null &&
                           dependency.VersionSpec.Satisfies(package.Version) &&
@@ -248,9 +259,9 @@ namespace NuGet
                     select p);
         }
 
-        public static PackageDependency FindDependency(this IPackageMetadata package, string packageId)
+        public static PackageDependency FindDependency(this IPackageMetadata package, string packageId, FrameworkName targetFramework)
         {
-            return (from dependency in package.Dependencies
+            return (from dependency in package.GetCompatiblePackageDependencies(targetFramework)
                     where dependency.Id.Equals(packageId, StringComparison.OrdinalIgnoreCase)
                     select dependency).FirstOrDefault();
         }
@@ -267,10 +278,10 @@ namespace NuGet
                 throw new ArgumentNullException("targetFrameworks");
             }
 
-            var searchableRepository = repository as ISearchableRepository;
-            if (searchableRepository != null)
+            var serviceBasedRepository = repository as IServiceBasedRepository;
+            if (serviceBasedRepository != null)
             {
-                return searchableRepository.Search(searchTerm, targetFrameworks, allowPrereleaseVersions);
+                return serviceBasedRepository.Search(searchTerm, targetFrameworks, allowPrereleaseVersions);
             }
 
             // Ignore the target framework if the repository doesn't support searching
@@ -355,58 +366,55 @@ namespace NuGet
         /// <param name="packages">Packages to look for updates</param>
         /// <param name="includePrerelease">Indicates whether to consider prerelease updates.</param>
         /// <param name="includeAllVersions">Indicates whether to include all versions of an update as opposed to only including the latest version.</param>
-        /// <returns></returns>
         public static IEnumerable<IPackage> GetUpdates(
             this IPackageRepository repository,
             IEnumerable<IPackage> packages,
             bool includePrerelease,
-            bool includeAllVersions)
+            bool includeAllVersions,
+            IEnumerable<FrameworkName> targetFramework = null)
         {
-            List<IPackage> packageList = packages.ToList();
+            if (packages.IsEmpty())
+            {
+                return Enumerable.Empty<IPackage>();
+            }
+
+            var serviceBasedRepository = repository as IServiceBasedRepository;
+            return serviceBasedRepository != null ? serviceBasedRepository.GetUpdates(packages, includePrerelease, includeAllVersions, targetFramework) :
+                                                    repository.GetUpdatesCore(packages, includePrerelease, includeAllVersions, targetFramework);
+        }
+
+        public static IEnumerable<IPackage> GetUpdatesCore(this IPackageRepository repository, IEnumerable<IPackageMetadata> packages, bool includePrerelease, bool includeAllVersions, 
+            IEnumerable<FrameworkName> targetFramework)
+        {
+            List<IPackageMetadata> packageList = packages.ToList();
 
             if (!packageList.Any())
             {
-                yield break;
+                return Enumerable.Empty<IPackage>();
             }
 
-            if (includeAllVersions)
+
+            // These are the packages that we need to look at for potential updates.
+            ILookup<string, IPackage> sourcePackages = GetUpdateCandidates(repository, packageList, includePrerelease)
+                                                                            .ToList()
+                                                                            .ToLookup(package => package.Id, StringComparer.OrdinalIgnoreCase);
+
+            var updates = from package in packageList
+                          from candidate in sourcePackages[package.Id]
+                          where (candidate.Version > package.Version) &&
+                                 SupportsTargetFrameworks(targetFramework, candidate)
+                          select candidate;
+
+            if (!includeAllVersions)
             {
-                // These are the packages that we need to look at for potential updates.
-                ILookup<string, IPackage> sourcePackages = GetUpdateCandidates(repository, packageList, includePrerelease)
-                                                                               .ToList()
-                                                                               .ToLookup(package => package.Id, StringComparer.OrdinalIgnoreCase);
-
-                foreach (IPackage package in packageList)
-                {
-                    foreach (var candidate in sourcePackages[package.Id])
-                    {
-                        if (candidate.Version > package.Version)
-                        {
-                            yield return candidate;
-                        }
-                    }
-                }
+                return updates.CollapseById();
             }
-            else
-            {
-                // These are the packages that we need to look at for potential updates.
-                IDictionary<string, IPackage> sourcePackages = GetUpdateCandidates(repository, packageList, includePrerelease)
-                                                                               .ToList()
-                                                                               .GroupBy(package => package.Id)
-                                                                               .ToDictionary(package => package.Key,
-                                                                                             package => package.OrderByDescending(p => p.Version).First(),
-                                                                                             StringComparer.OrdinalIgnoreCase);
+            return updates;
+        }
 
-                foreach (IPackage package in packageList)
-                {
-                    IPackage newestAvailablePackage;
-                    if (sourcePackages.TryGetValue(package.Id, out newestAvailablePackage) &&
-                        newestAvailablePackage.Version > package.Version)
-                    {
-                        yield return newestAvailablePackage;
-                    }
-                }
-            }
+        private static bool SupportsTargetFrameworks(IEnumerable<FrameworkName> targetFramework, IPackage package)
+        {
+            return targetFramework.IsEmpty() || targetFramework.Any(t => VersionUtility.IsCompatible(t, package.GetSupportedFrameworks()));
         }
 
         public static IPackageRepository Clone(this IPackageRepository repository)
@@ -425,7 +433,7 @@ namespace NuGet
         /// </summary>
         private static IEnumerable<IPackage> GetUpdateCandidates(
             IPackageRepository repository,
-            IEnumerable<IPackage> packages,
+            IEnumerable<IPackageMetadata> packages,
             bool includePrerelease)
         {
 
@@ -445,7 +453,7 @@ namespace NuGet
         /// For the list of input packages generate an expression like:
         /// p => p.Id == 'package1id' or p.Id == 'package2id' or p.Id == 'package3id'... up to package n
         /// </summary>
-        private static Expression<Func<IPackage, bool>> GetFilterExpression(IEnumerable<IPackage> packages)
+        private static Expression<Func<IPackage, bool>> GetFilterExpression(IEnumerable<IPackageMetadata> packages)
         {
             return GetFilterExpression(packages.Select(p => p.Id));
         }

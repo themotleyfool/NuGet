@@ -14,30 +14,34 @@ namespace NuGetConsole.Host.PowerShell.Implementation
     internal class RunspaceManager : IRunspaceManager
     {
         // Cache Runspace by name. There should be only one Runspace instance created though.
-        private readonly ConcurrentDictionary<string, Tuple<Runspace, NuGetPSHost>> _runspaceCache = new ConcurrentDictionary<string, Tuple<Runspace, NuGetPSHost>>();
+        private readonly ConcurrentDictionary<string, Tuple<RunspaceDispatcher, NuGetPSHost>> _runspaceCache = new ConcurrentDictionary<string, Tuple<RunspaceDispatcher, NuGetPSHost>>();
 
         public const string ProfilePrefix = "NuGet";
 
-        public Tuple<Runspace, NuGetPSHost> GetRunspace(IConsole console, string hostName)
+        public Tuple<RunspaceDispatcher, NuGetPSHost> GetRunspace(IConsole console, string hostName)
         {
             return _runspaceCache.GetOrAdd(hostName, name => CreateAndSetupRunspace(console, name));
-        }
-
-        private static Tuple<Runspace, NuGetPSHost> CreateAndSetupRunspace(IConsole console, string hostName)
-        {
-            Tuple<Runspace, NuGetPSHost> runspace = CreateRunspace(console, hostName);
-            SetupExecutionPolicy(runspace.Item1);
-            LoadModules(runspace.Item1);
-            LoadProfilesIntoRunspace(runspace.Item1);
-
-            return runspace;
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage(
             "Microsoft.Reliability",
             "CA2000:Dispose objects before losing scope",
             Justification = "We can't dispose it if we want to return it.")]
-        private static Tuple<Runspace, NuGetPSHost> CreateRunspace(IConsole console, string hostName)
+        private static Tuple<RunspaceDispatcher, NuGetPSHost> CreateAndSetupRunspace(IConsole console, string hostName)
+        {
+            Tuple<RunspaceDispatcher, NuGetPSHost> runspace = CreateRunspace(console, hostName);
+            SetupExecutionPolicy(runspace.Item1);
+            LoadModules(runspace.Item1);
+            LoadProfilesIntoRunspace(runspace.Item1);
+
+            return Tuple.Create(runspace.Item1, runspace.Item2);
+        }
+
+        [System.Diagnostics.CodeAnalysis.SuppressMessage(
+            "Microsoft.Reliability",
+            "CA2000:Dispose objects before losing scope",
+            Justification = "We can't dispose it if we want to return it.")]
+        private static Tuple<RunspaceDispatcher, NuGetPSHost> CreateRunspace(IConsole console, string hostName)
         {
             DTE dte = ServiceLocator.GetInstance<DTE>();
 
@@ -81,10 +85,10 @@ namespace NuGetConsole.Host.PowerShell.Implementation
             //
             Runspace.DefaultRunspace = runspace;
 
-            return Tuple.Create(runspace, host);
+            return Tuple.Create(new RunspaceDispatcher(runspace), host);
         }
 
-        private static void SetupExecutionPolicy(Runspace runspace)
+        private static void SetupExecutionPolicy(RunspaceDispatcher runspace)
         {
             ExecutionPolicy policy = runspace.GetEffectiveExecutionPolicy();
             if (policy != ExecutionPolicy.Unrestricted &&
@@ -101,7 +105,7 @@ namespace NuGetConsole.Host.PowerShell.Implementation
             }
         }
 
-        private static void LoadModules(Runspace runspace)
+        private static void LoadModules(RunspaceDispatcher runspace)
         {
             // We store our PS module file at <extension root>\Modules\NuGet\NuGet.psd1
             string extensionRoot = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
@@ -116,20 +120,10 @@ namespace NuGetConsole.Host.PowerShell.Implementation
 #endif
         }
 
-        private static void LoadProfilesIntoRunspace(Runspace runspace)
+        private static void LoadProfilesIntoRunspace(RunspaceDispatcher runspace)
         {
-            using (var powerShell = System.Management.Automation.PowerShell.Create())
-            {
-                powerShell.Runspace = runspace;
-
-                PSCommand[] profileCommands = HostUtilities.GetProfileCommands(ProfilePrefix);
-                foreach (PSCommand command in profileCommands)
-                {
-                    powerShell.Commands = command;
-                    powerShell.AddCommand("out-default");
-                    powerShell.Invoke();
-                }
-            }
+            PSCommand[] profileCommands = HostUtilities.GetProfileCommands(ProfilePrefix);
+            runspace.InvokeCommands(profileCommands);
         }
     }
 }

@@ -52,7 +52,7 @@ namespace NuGet.VisualStudio
         private static readonly string[] _unsupportedProjectTypesForBindingRedirects = new[] { VsConstants.WixProjectTypeGuid, VsConstants.JsProjectTypeGuid, VsConstants.NemerleProjectTypeGuid };
 
         private static readonly char[] PathSeparatorChars = new[] { Path.DirectorySeparatorChar };
-        
+
         // Get the ProjectItems for a folder path
         public static ProjectItems GetProjectItems(this Project project, string folderPath, bool createIfNotExists = false)
         {
@@ -299,6 +299,11 @@ namespace NuGet.VisualStudio
 
         public static string GetTargetFramework(this Project project)
         {
+            if (project == null)
+            {
+                return null;
+            }
+
             if (project.IsJavaScriptProject())
             {
                 // HACK: The JS Metro project does not have a TargetFrameworkMoniker property set. 
@@ -312,8 +317,25 @@ namespace NuGet.VisualStudio
             return project.GetPropertyValue<string>("TargetFrameworkMoniker");
         }
 
+        public static FrameworkName GetTargetFrameworkName(this Project project)
+        {
+            string targetFrameworkMoniker = project.GetTargetFramework();
+            if (targetFrameworkMoniker != null)
+            {
+                return new FrameworkName(targetFrameworkMoniker);
+            }
+
+            return null;
+        }
+
         public static T GetPropertyValue<T>(this Project project, string propertyName)
         {
+            if (project.Properties == null)
+            {
+                // this happens in unit tests
+                return default(T);
+            }
+
             try
             {
                 Property property = project.Properties.Item(propertyName);
@@ -325,7 +347,6 @@ namespace NuGet.VisualStudio
             }
             catch (ArgumentException)
             {
-
             }
             return default(T);
         }
@@ -512,19 +533,20 @@ namespace NuGet.VisualStudio
             {
                 return true;
             }
-            FrameworkName frameworkName = project.GetTargetFrameworkName();
-            return VersionUtility.IsCompatible(frameworkName, package.GetSupportedFrameworks());
-        }
 
-        public static FrameworkName GetTargetFrameworkName(this Project project)
-        {
-            string targetFrameworkMoniker = project.GetTargetFramework();
-            if (targetFrameworkMoniker != null)
+            // if there is any file under content/lib which has no target framework, we consider the package
+            // compatible with any project, because that file will be the fallback if no supported frameworks matches the project's. 
+            // REVIEW: what about install.ps1 and uninstall.ps1?
+            bool hasFileWithNullTargetFramework = package.GetContentFiles()
+                                                         .Concat(package.GetLibFiles())
+                                                         .Any(file => file.TargetFramework == null);
+            if (hasFileWithNullTargetFramework)
             {
-                return new FrameworkName(targetFrameworkMoniker);
+                return true;
             }
 
-            return null;
+            FrameworkName frameworkName = project.GetTargetFrameworkName();
+            return VersionUtility.IsCompatible(frameworkName, package.GetSupportedFrameworks());
         }
 
         public static IEnumerable<string> GetProjectTypeGuids(this Project project)

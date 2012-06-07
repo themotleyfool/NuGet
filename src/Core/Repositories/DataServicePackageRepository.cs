@@ -8,7 +8,7 @@ using System.Runtime.Versioning;
 
 namespace NuGet
 {
-    public class DataServicePackageRepository : PackageRepositoryBase, IHttpClientEvents, ISearchableRepository, ICloneableRepository, ICultureAwareRepository
+    public class DataServicePackageRepository : PackageRepositoryBase, IHttpClientEvents, IServiceBasedRepository, ICloneableRepository, ICultureAwareRepository, IOperationAwareRepository
     {
         private IDataServiceContext _context;
         private readonly IHttpClient _httpClient;
@@ -16,6 +16,7 @@ namespace NuGet
         private CultureInfo _culture;
         private const string FindPackagesByIdSvcMethod = "FindPackagesById";
         private const string SearchSvcMethod = "Search";
+        private const string GetUpdatesSvcMethod = "GetUpdates";
 
         // Just forward calls to the package downloader
         public event EventHandler<ProgressEventArgs> ProgressAvailable
@@ -49,6 +50,8 @@ namespace NuGet
             get { return _packageDownloader; }
         }
 
+        public string CurrentOperation { get; private set; }
+
         public DataServicePackageRepository(Uri serviceRoot)
             : this(new HttpClient(serviceRoot))
         {
@@ -74,11 +77,19 @@ namespace NuGet
             _httpClient.AcceptCompression = true;
 
             _packageDownloader = packageDownloader;
+
+            SendingRequest += (sender, e) =>
+            {
+                if (!String.IsNullOrEmpty(CurrentOperation))
+                {
+                    e.Request.Headers[RepositoryOperationNames.OperationHeaderName] = CurrentOperation;
+                }
+            };
         }
 
         public CultureInfo Culture
         {
-            get 
+            get
             {
                 if (_culture == null)
                 {
@@ -152,7 +163,6 @@ namespace NuGet
             return new SmartDataServiceQuery<DataServicePackage>(Context, Constants.PackageServiceEntitySetName);
         }
 
-        [SuppressMessage("Microsoft.Globalization", "CA1308:NormalizeStringsToUppercase", Justification = "OData expects a lower case value.")]
         public IQueryable<IPackage> Search(string searchTerm, IEnumerable<string> targetFrameworks, bool allowPrereleaseVersions)
         {
             if (!Context.SupportsServiceMethod(SearchSvcMethod))
@@ -177,7 +187,7 @@ namespace NuGet
 
             if (SupportsPrereleasePackages)
             {
-                searchParameters.Add("includePrerelease", allowPrereleaseVersions.ToString(CultureInfo.InvariantCulture).ToLowerInvariant());
+                searchParameters.Add("includePrerelease", ToString(allowPrereleaseVersions));
             }
 
             // Create a query for the search service method
@@ -202,9 +212,45 @@ namespace NuGet
             return new SmartDataServiceQuery<DataServicePackage>(Context, query);
         }
 
+        public IEnumerable<IPackage> GetUpdates(IEnumerable<IPackage> packages, bool includePrerelease, bool includeAllVersions, IEnumerable<FrameworkName> targetFramework)
+        {
+            if (!Context.SupportsServiceMethod(GetUpdatesSvcMethod))
+            {
+                // If there's no search method then we can't filter by target framework
+                return PackageRepositoryExtensions.GetUpdatesCore(this, packages, includePrerelease, includeAllVersions, targetFramework);
+            }
+
+            // Pipe all the things!
+            string ids = String.Join("|", packages.Select(p => p.Id));
+            string versions = String.Join("|", packages.Select(p => p.Version.ToString()));
+            string targetFrameworkValue = targetFramework.IsEmpty() ? "" : String.Join("|", targetFramework.Select(VersionUtility.GetShortFrameworkName));
+
+            var serviceParameters = new Dictionary<string, object> {
+                { "packageIds", "'" + ids + "'" },
+                { "versions", "'" + versions + "'" },
+                { "includePrerelease", ToString(includePrerelease) },
+                { "includeAllVersions", ToString(includeAllVersions) },
+                { "targetFrameworks", "'" + Escape(targetFrameworkValue) + "'" },
+               
+            };
+
+            var query = Context.CreateQuery<DataServicePackage>(GetUpdatesSvcMethod, serviceParameters);
+            return new SmartDataServiceQuery<DataServicePackage>(Context, query);
+        }
+
         public IPackageRepository Clone()
         {
             return new DataServicePackageRepository(_httpClient, _packageDownloader);
+        }
+
+        public IDisposable StartOperation(string operation)
+        {
+            string oldOperation = CurrentOperation;
+            CurrentOperation = operation;
+            return new DisposableAction(() =>
+            {
+                CurrentOperation = oldOperation;
+            });
         }
 
         /// <summary>
@@ -219,6 +265,12 @@ namespace NuGet
             }
 
             return value;
+        }
+
+        [SuppressMessage("Microsoft.Globalization", "CA1308:NormalizeStringsToUppercase", Justification = "OData expects a lower case value.")]
+        private static string ToString(bool value)
+        {
+            return value.ToString().ToLowerInvariant();
         }
     }
 }

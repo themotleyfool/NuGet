@@ -3,11 +3,12 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Runtime.Versioning;
 using System.Threading.Tasks;
 
 namespace NuGet
 {
-    public class AggregateRepository : PackageRepositoryBase, IPackageLookup, IDependencyResolver, ISearchableRepository, ICloneableRepository
+    public class AggregateRepository : PackageRepositoryBase, IPackageLookup, IDependencyResolver, IServiceBasedRepository, ICloneableRepository, IOperationAwareRepository
     {
         /// <summary>
         /// When the ignore flag is set up, this collection keeps track of failing repositories so that the AggregateRepository 
@@ -111,6 +112,14 @@ namespace NuGet
             Func<IPackageRepository, IPackage> findPackage = Wrap(r => r.FindPackage(packageId, version));
             return Repositories.Select(findPackage)
                                .FirstOrDefault(p => p != null);
+        }
+
+        public bool Exists(string packageId, SemanticVersion version)
+        {
+            // When we're looking for an exact package, we can optimize but searching each
+            // repository one by one until we find the package that matches.
+            Func<IPackageRepository, bool> exists = Wrap(r => r.Exists(packageId, version));
+            return Repositories.Any(exists);
         }
 
         public IPackage ResolveDependency(PackageDependency dependency, IPackageConstraintProvider constraintProvider, bool allowPrereleaseVersions, bool preferListedPackages)
@@ -219,6 +228,52 @@ namespace NuGet
                 }
             }
             return allPackages;
+        }
+
+        [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "We want to suppress any exception that we may encounter.")]
+        public IEnumerable<IPackage> GetUpdates(IEnumerable<IPackage> packages, bool includePrerelease, bool includeAllVersions, IEnumerable<FrameworkName> targetFramework)
+        {
+            // GetUpdatesCore returns all updates. We'll allow the extension method to determine if we need to collapse based on allVersion.
+            var tasks = _repositories.Select(p => Task.Factory.StartNew(state => p.GetUpdates(packages, includePrerelease, includeAllVersions, targetFramework), p)).ToArray();
+
+            try
+            {
+                Task.WaitAll(tasks);
+            }
+            catch (AggregateException)
+            {
+                if (!IgnoreFailingRepositories)
+                {
+                    throw;
+                }
+            }
+
+            var allPackages = new HashSet<IPackage>(PackageEqualityComparer.IdAndVersion);
+            foreach (var task in tasks)
+            {
+                if (task.IsFaulted)
+                {
+                    LogRepository((IPackageRepository)task.AsyncState, task.Exception);
+                }
+                else if (task.Result != null)
+                {
+                    allPackages.AddRange(task.Result);
+                }
+            }
+            if (includeAllVersions)
+            {
+                // If we return all packages, sort them by Id and Version to make the sequence predictable.
+                return allPackages.OrderBy(p => p.Id, StringComparer.OrdinalIgnoreCase)
+                                  .ThenBy(p => p.Version);
+            }
+
+            return allPackages.CollapseById();
+        }
+
+        public IDisposable StartOperation(string operation)
+        {
+            return DisposableAction.All(
+                Repositories.Select(r => r.StartOperation(operation)));
         }
     }
 }

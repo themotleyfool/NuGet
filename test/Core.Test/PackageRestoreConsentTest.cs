@@ -151,11 +151,11 @@ namespace NuGet.Test
             packageRestore.IsGranted = false;
 
             // Assert
-            settings.Verify(s => s.DeleteSection("packageRestore"), Times.Once());
+            settings.Verify(s => s.SetValue("packageRestore", "enabled", "False"), Times.Once());
         }
 
         [Fact]
-        public void SettingIsGrantedToTrueSetTheFlagInConfigFile()
+        public void SettingIsGrantedToTrueSetsTheFlagInConfigFile()
         {
             // Arrange
             var settings = new Mock<ISettings>();
@@ -168,7 +168,7 @@ namespace NuGet.Test
             packageRestore.IsGranted = true;
 
             // Assert
-            settings.Verify(s => s.SetValue("packageRestore", "enabled", "true"), Times.Once());
+            settings.Verify(s => s.SetValue("packageRestore", "enabled", "True"), Times.Once());
         }
     }
 }
