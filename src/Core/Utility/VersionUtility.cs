@@ -348,15 +348,42 @@ namespace NuGet
         }
 
         /// <summary>
+        /// The minor upgrade range is defined as the highest minor, build and revision for a given major version
+        /// </summary>
+        public static IVersionSpec GetMinorUpgradeRange(SemanticVersion version)
+        {
+            return new VersionSpec
+            {
+                IsMinInclusive = false,
+                IsMaxInclusive = false,
+                MinVersion = version,
+                MaxVersion = new SemanticVersion(new Version(version.Version.Major + 1, 0))
+            };
+        }
+
+        /// <summary>
         /// The safe range is defined as the highest build and revision for a given major and minor version
         /// </summary>
         public static IVersionSpec GetSafeRange(SemanticVersion version)
         {
             return new VersionSpec
             {
-                IsMinInclusive = true,
+                IsMinInclusive = false,
                 MinVersion = version,
                 MaxVersion = new SemanticVersion(new Version(version.Version.Major, version.Version.Minor + 1))
+            };
+        }
+
+        /// <summary>
+        /// Returns a version range that matches any higher version than the <paramref name="version"/> passed in.
+        /// </summary>
+        public static IVersionSpec GetUpgradeRange(SemanticVersion version)
+        {
+            return new VersionSpec
+            {
+                IsMinInclusive = false,
+                MinVersion = version,
+                IsMaxInclusive = true,
             };
         }
 

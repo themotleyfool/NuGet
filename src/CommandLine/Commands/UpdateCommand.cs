@@ -43,6 +43,9 @@ namespace NuGet.Commands
             get { return _ids; }
         }
 
+        [Option(typeof(NuGetResources), "UpdateCommandMinorDescription")]
+        public bool Minor { get; set; }
+
         [Option(typeof(NuGetResources), "UpdateCommandRepositoryPathDescription")]
         public string RepositoryPath { get; set; }
 
@@ -286,6 +289,12 @@ namespace NuGet.Commands
                 projectManager.Logger = Console;
             }
 
+            UpdatePackages(localRepository, projectManager);
+        }
+
+        internal void UpdatePackages(IPackageRepository localRepository,
+                                     IProjectManager projectManager)
+        {
             foreach (var package in GetPackages(localRepository))
             {
                 if (localRepository.Exists(package.Id))
@@ -295,15 +304,21 @@ namespace NuGet.Commands
                         // If the user explicitly allows prerelease or if the package being updated is prerelease we'll include prerelease versions in our list of packages
                         // being considered for an update.
                         bool allowPrerelease = Prerelease || !package.IsReleaseVersion();
+                        IVersionSpec upgradeRange;
                         if (Safe)
                         {
-                            IVersionSpec safeRange = VersionUtility.GetSafeRange(package.Version);
-                            projectManager.UpdatePackageReference(package.Id, safeRange, updateDependencies: true, allowPrereleaseVersions: allowPrerelease);
+                            upgradeRange = VersionUtility.GetSafeRange(package.Version);
+                        }
+                        else if (Minor)
+                        {
+                            upgradeRange = VersionUtility.GetMinorUpgradeRange(package.Version);
                         }
                         else
                         {
-                            projectManager.UpdatePackageReference(package.Id, version: null, updateDependencies: true, allowPrereleaseVersions: allowPrerelease);
+                            upgradeRange = VersionUtility.GetUpgradeRange(package.Version);
                         }
+                        
+                        projectManager.UpdatePackageReference(package.Id, upgradeRange, updateDependencies: true, allowPrereleaseVersions: allowPrerelease);
                     }
                     catch (InvalidOperationException e)
                     {

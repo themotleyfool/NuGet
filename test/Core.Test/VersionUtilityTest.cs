@@ -604,6 +604,34 @@ namespace NuGet.Test
         }
 
         [Fact]
+        public void GetUpgradeVersions()
+        {
+            // Act
+            IVersionSpec versionSpec1 = VersionUtility.GetUpgradeRange(new SemanticVersion("1.3"));
+            IVersionSpec versionSpec2 = VersionUtility.GetUpgradeRange(new SemanticVersion("0.9"));
+            IVersionSpec versionSpec3 = VersionUtility.GetUpgradeRange(new SemanticVersion("2.9.45.6"));
+
+            // Assert
+            Assert.Equal("(1.3, ]", versionSpec1.ToString());
+            Assert.Equal("(0.9, ]", versionSpec2.ToString());
+            Assert.Equal("(2.9.45.6, ]", versionSpec3.ToString());
+        }
+
+        [Fact]
+        public void GetMinorUpgradeVersions()
+        {
+            // Act
+            IVersionSpec versionSpec1 = VersionUtility.GetMinorUpgradeRange(new SemanticVersion("1.3"));
+            IVersionSpec versionSpec2 = VersionUtility.GetMinorUpgradeRange(new SemanticVersion("0.9"));
+            IVersionSpec versionSpec3 = VersionUtility.GetMinorUpgradeRange(new SemanticVersion("2.9.45.6"));
+
+            // Assert
+            Assert.Equal("(1.3, 2.0)", versionSpec1.ToString());
+            Assert.Equal("(0.9, 1.0)", versionSpec2.ToString());
+            Assert.Equal("(2.9.45.6, 3.0)", versionSpec3.ToString());
+        }
+
+        [Fact]
         public void GetSafeVersions()
         {
             // Act
@@ -619,7 +647,7 @@ namespace NuGet.Test
 
         private void AssertSafeVersion(IVersionSpec versionSpec, SemanticVersion minVer, SemanticVersion maxVer)
         {
-            Assert.True(versionSpec.IsMinInclusive);
+            Assert.False(versionSpec.IsMinInclusive);
             Assert.False(versionSpec.IsMaxInclusive);
             Assert.Equal(versionSpec.MinVersion, minVer);
             Assert.Equal(versionSpec.MaxVersion, maxVer);
