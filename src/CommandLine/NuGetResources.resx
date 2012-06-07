@@ -745,4 +745,7 @@ nuget update -Self</value>
   <data name="SourcesCommandCredentialsRequired" xml:space="preserve">
     <value>Both UserName and Password must be specified.</value>
   </data>
+  <data name="UpdateCommandMinorDescription" xml:space="preserve">
+    <value>Looks for updates with the highest version available within the same major version as the installed package.</value>
+  </data>
 </root>

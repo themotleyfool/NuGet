@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -42,6 +43,9 @@ namespace NuGet.Commands
             get { return _ids; }
         }
 
+        [Option(typeof(NuGetResources), "UpdateCommandMinorDescription")]
+        public bool Minor { get; set; }
+
         [Option(typeof(NuGetResources), "UpdateCommandRepositoryPathDescription")]
         public string RepositoryPath { get; set; }
 
@@ -62,7 +66,8 @@ namespace NuGet.Commands
             if (Self)
             {
                 Assembly assembly = typeof(UpdateCommand).Assembly;
-                SelfUpdate(assembly.Location, new SemanticVersion(assembly.GetName().Version));
+                var version = GetNuGetVersion(assembly) ?? new SemanticVersion(assembly.GetName().Version);
+                SelfUpdate(assembly.Location, version);
             }
             else
             {
@@ -284,6 +289,12 @@ namespace NuGet.Commands
                 projectManager.Logger = Console;
             }
 
+            UpdatePackages(localRepository, projectManager);
+        }
+
+        internal void UpdatePackages(IPackageRepository localRepository,
+                                     IProjectManager projectManager)
+        {
             foreach (var package in GetPackages(localRepository))
             {
                 if (localRepository.Exists(package.Id))
@@ -293,15 +304,21 @@ namespace NuGet.Commands
                         // If the user explicitly allows prerelease or if the package being updated is prerelease we'll include prerelease versions in our list of packages
                         // being considered for an update.
                         bool allowPrerelease = Prerelease || !package.IsReleaseVersion();
+                        IVersionSpec upgradeRange;
                         if (Safe)
                         {
-                            IVersionSpec safeRange = VersionUtility.GetSafeRange(package.Version);
-                            projectManager.UpdatePackageReference(package.Id, safeRange, updateDependencies: true, allowPrereleaseVersions: allowPrerelease);
+                            upgradeRange = VersionUtility.GetSafeRange(package.Version);
+                        }
+                        else if (Minor)
+                        {
+                            upgradeRange = VersionUtility.GetMinorUpgradeRange(package.Version);
                         }
                         else
                         {
-                            projectManager.UpdatePackageReference(package.Id, version: null, updateDependencies: true, allowPrereleaseVersions: allowPrerelease);
+                            upgradeRange = VersionUtility.GetUpgradeRange(package.Version);
                         }
+                        
+                        projectManager.UpdatePackageReference(package.Id, upgradeRange, updateDependencies: true, allowPrereleaseVersions: allowPrerelease);
                     }
                     catch (InvalidOperationException e)
                     {
@@ -356,6 +373,21 @@ namespace NuGet.Commands
 
                 Console.WriteLine(NuGetResources.UpdateCommandUpdateSuccessful);
             }
+        }
+
+        [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "We don't want this method to throw.")]
+        internal static SemanticVersion GetNuGetVersion(ICustomAttributeProvider assembly)
+        {
+            try
+            {
+                var assemblyInformationalVersion = assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>();
+                return new SemanticVersion(assemblyInformationalVersion.InformationalVersion);
+            }
+            catch
+            {
+                // Don't let GetCustomAttributes throw.
+            }
+            return null;
         }
 
         protected virtual void UpdateFile(string exePath, IPackageFile file)

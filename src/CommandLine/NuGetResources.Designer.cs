@@ -1624,6 +1624,15 @@ namespace NuGet {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Looks for updates with the highest version available within the same major version as the installed package..
+        /// </summary>
+        internal static string UpdateCommandMinorDescription {
+            get {
+                return ResourceManager.GetString("UpdateCommandMinorDescription", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to NuGet.exe is up to date..
         /// </summary>
         internal static string UpdateCommandNuGetUpToDate {
