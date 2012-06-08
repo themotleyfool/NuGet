@@ -180,6 +180,7 @@
     <Compile Include="Utility\PackageComparer.cs" />
     <Compile Include="Utility\PackageHelper.cs" />
     <Compile Include="Utility\PackageIdValidator.cs" />
+    <Compile Include="Utility\PackageUpdateMode.cs" />
     <Compile Include="Utility\PathValidator.cs" />
     <Compile Include="Http\RedirectedHttpClient.cs" />
     <Compile Include="Utility\ProjectManagerExtensions.cs" />

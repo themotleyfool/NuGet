@@ -162,7 +162,7 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             MockPackageRepository localRepository;
             var updateCmd = ArrangeForUpdatePackages(out projectManager, out localRepository);
             localRepository.AddPackage(PackageUtility.CreatePackage("Sample"));
-            projectManager.Setup(pm => pm.UpdatePackageReference("Sample", VersionUtility.GetUpgradeRange(new SemanticVersion("1.0")), true, false));
+            projectManager.Setup(pm => pm.UpdatePackageReference("Sample", VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("1.0"), PackageUpdateMode.Newest), true, false));
 
             // Act
             updateCmd.UpdatePackages(localRepository, projectManager.Object);
@@ -179,7 +179,7 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             MockPackageRepository localRepository;
             var updateCmd = ArrangeForUpdatePackages(out projectManager, out localRepository);
             localRepository.AddPackage(PackageUtility.CreatePackage("Sample"));
-            projectManager.Setup(pm => pm.UpdatePackageReference("Sample", VersionUtility.GetMinorUpgradeRange(new SemanticVersion("1.0")), true, false));
+            projectManager.Setup(pm => pm.UpdatePackageReference("Sample", VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("1.0"), PackageUpdateMode.Minor), true, false));
 
             updateCmd.Minor = true;
 
@@ -198,7 +198,7 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             MockPackageRepository localRepository;
             var updateCmd = ArrangeForUpdatePackages(out projectManager, out localRepository);
             localRepository.AddPackage(PackageUtility.CreatePackage("Sample"));
-            projectManager.Setup(pm => pm.UpdatePackageReference("Sample", VersionUtility.GetSafeRange(new SemanticVersion("1.0")), true, false));
+            projectManager.Setup(pm => pm.UpdatePackageReference("Sample", VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("1.0"), PackageUpdateMode.Safe), true, false));
 
             updateCmd.Safe = true;
 

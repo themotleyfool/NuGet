@@ -415,7 +415,7 @@ namespace NuGet.PowerShell.Commands.Test
 
             public bool UpdateDependencies { get; set; }
 
-            public override void UpdatePackage(IProjectManager projectManager, string packageId, SemanticVersion version, bool updateDependencies, bool allowPreReleaseVersions, ILogger logger)
+            public override void UpdatePackageToSpecificVersion(IProjectManager projectManager, string packageId, SemanticVersion version, bool updateDependencies, bool allowPreReleaseVersions, ILogger logger)
             {
                 ProjectManager = projectManager;
                 PackageId = packageId;
