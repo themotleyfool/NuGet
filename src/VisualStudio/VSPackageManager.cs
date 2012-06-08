@@ -259,7 +259,7 @@ namespace NuGet.VisualStudio
                 packageOperationEventListener);
         }
 
-        public virtual void UpdatePackage(IProjectManager projectManager, string packageId, SemanticVersion version, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger)
+        public virtual void UpdatePackageToSpecificVersion(IProjectManager projectManager, string packageId, SemanticVersion version, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger)
         {
             UpdatePackage(projectManager,
                           packageId,
@@ -334,7 +334,7 @@ namespace NuGet.VisualStudio
                           eventListener);
         }
 
-        public void UpdatePackage(string packageId, SemanticVersion version, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
+        public void UpdatePackageToSpecificVersion(string packageId, SemanticVersion version, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
         {
             UpdatePackage(packageId,
                           projectManager => UpdatePackageReference(projectManager, packageId, version, updateDependencies, allowPrereleaseVersions),
@@ -345,46 +345,36 @@ namespace NuGet.VisualStudio
                           eventListener);
         }
 
-        public void UpdatePackages(bool updateDependencies, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
+        public void UpdatePackages(PackageUpdateMode updateMode, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
         {
-            UpdatePackages(updateDependencies, safeUpdate: false, allowPrereleaseVersions: allowPrereleaseVersions, logger: logger, eventListener: eventListener);
+            UpdatePackages(packageRepository: LocalRepository, updateMode: updateMode, updateDependencies: updateDependencies, allowPrereleaseVersions: allowPrereleaseVersions, logger: logger, eventListener: eventListener);
         }
 
-        public void UpdatePackages(IProjectManager projectManager, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger)
+        public void UpdatePackages(IProjectManager projectManager, PackageUpdateMode updateMode, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger)
         {
-            UpdatePackages(projectManager, updateDependencies, safeUpdate: false, allowPrereleaseVersions: allowPrereleaseVersions, logger: logger);
+            UpdatePackages(projectManager, updateDependencies, updateMode: updateMode, allowPrereleaseVersions: allowPrereleaseVersions, logger: logger);
         }
 
-        public void SafeUpdatePackages(IProjectManager projectManager, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger)
-        {
-            UpdatePackages(projectManager, updateDependencies, safeUpdate: true, allowPrereleaseVersions: allowPrereleaseVersions, logger: logger);
-        }
-
-        public void SafeUpdatePackage(string packageId, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
+        public void UpdatePackage(string packageId, PackageUpdateMode updateMode, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
         {
             UpdatePackage(packageId,
-                          projectManager => UpdatePackageReference(projectManager, packageId, GetSafeRange(projectManager, packageId), updateDependencies, allowPrereleaseVersions),
-                          () => SourceRepository.FindPackage(packageId, GetSafeRange(packageId), allowPrereleaseVersions: false, allowUnlisted: false),
+                          projectManager => UpdatePackageReference(projectManager, packageId, GetUpgradeVersionSpec(projectManager, packageId, updateMode), updateDependencies, allowPrereleaseVersions),
+                          () => SourceRepository.FindPackage(packageId, GetUpgradeVersionSpec(packageId, updateMode), allowPrereleaseVersions: false, allowUnlisted: false),
                           updateDependencies,
                           allowPrereleaseVersions,
                           logger,
                           eventListener);
         }
 
-        public void SafeUpdatePackage(IProjectManager projectManager, string packageId, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger)
+        public void UpdatePackage(IProjectManager projectManager, string packageId, PackageUpdateMode updateMode, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger)
         {
             UpdatePackage(projectManager,
                           packageId,
-                          () => UpdatePackageReference(projectManager, packageId, GetSafeRange(projectManager, packageId), updateDependencies, allowPrereleaseVersions),
-                          () => SourceRepository.FindPackage(packageId, GetSafeRange(packageId), allowPrereleaseVersions: false, allowUnlisted: false),
+                          () => UpdatePackageReference(projectManager, packageId, GetUpgradeVersionSpec(projectManager, packageId, updateMode), updateDependencies, allowPrereleaseVersions),
+                          () => SourceRepository.FindPackage(packageId, GetUpgradeVersionSpec(packageId, updateMode), allowPrereleaseVersions: false, allowUnlisted: false),
                           updateDependencies,
                           allowPrereleaseVersions,
                           logger);
-        }
-
-        public void SafeUpdatePackages(bool updateDependencies, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
-        {
-            UpdatePackages(updateDependencies, safeUpdate: true, allowPrereleaseVersions: allowPrereleaseVersions, logger: logger, eventListener: eventListener);
         }
 
         protected override void ExecuteUninstall(IPackage package)
@@ -524,6 +514,7 @@ namespace NuGet.VisualStudio
                 if (packages.Count > 1)
                 {
                     throw CreateAmbiguousUpdateException(projectManager: null, packages: packages);
+
                 }
             }
             else if (!_sharedRepository.IsReferenced(package.Id, package.Version))
@@ -1035,36 +1026,20 @@ namespace NuGet.VisualStudio
             }
         }
 
-        private void UpdatePackages(IProjectManager projectManager, bool updateDependencies, bool safeUpdate, bool allowPrereleaseVersions, ILogger logger)
+        private void UpdatePackages(IProjectManager projectManager, bool updateDependencies, PackageUpdateMode updateMode, bool allowPrereleaseVersions, ILogger logger)
         {
-            UpdatePackages(projectManager.LocalRepository, package =>
-            {
-                if (safeUpdate)
-                {
-                    SafeUpdatePackage(projectManager, package.Id, updateDependencies, allowPrereleaseVersions, logger);
-                }
-                else
-                {
-                    UpdatePackage(projectManager, package.Id, version: null, updateDependencies: updateDependencies,
-                        allowPrereleaseVersions: allowPrereleaseVersions, logger: logger);
-                }
-            }, logger);
+            UpdatePackages(
+                projectManager.LocalRepository,
+                package => UpdatePackage(projectManager, package.Id, updateMode, updateDependencies, allowPrereleaseVersions, logger),
+                logger);
         }
 
-        private void UpdatePackages(bool updateDependencies, bool safeUpdate, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
+        private void UpdatePackages(IPackageRepository packageRepository, PackageUpdateMode updateMode, bool updateDependencies, bool allowPrereleaseVersions, ILogger logger, IPackageOperationEventListener eventListener)
         {
-            UpdatePackages(LocalRepository, package =>
-            {
-                if (safeUpdate)
-                {
-                    SafeUpdatePackage(package.Id, updateDependencies, allowPrereleaseVersions, logger, eventListener);
-                }
-                else
-                {
-                    UpdatePackage(package.Id, version: null, updateDependencies: updateDependencies, allowPrereleaseVersions: allowPrereleaseVersions, logger: logger, eventListener: eventListener);
-                }
-            },
-            logger);
+            UpdatePackages(
+                packageRepository,
+                package => UpdatePackage(package.Id, updateMode, updateDependencies, allowPrereleaseVersions, logger, eventListener),
+                logger);
         }
 
         private void UpdatePackages(IPackageRepository localRepository, Action<IPackage> updateAction, ILogger logger)
@@ -1116,18 +1091,18 @@ namespace NuGet.VisualStudio
             return new AggregateRepository(new[] { _sharedRepository, SourceRepository.Clone() });
         }
 
-        private IVersionSpec GetSafeRange(string packageId)
+        private IVersionSpec GetUpgradeVersionSpec(string packageId, PackageUpdateMode updateMode)
         {
             bool appliesToProject;
             IPackage package = FindLocalPackage(packageId, out appliesToProject);
-            return VersionUtility.GetSafeRange(package.Version);
+            return VersionUtility.GetUpgradeVersionSpec(package.Version, updateMode);
         }
 
-        private IVersionSpec GetSafeRange(IProjectManager projectManager, string packageId)
+        private IVersionSpec GetUpgradeVersionSpec(IProjectManager projectManager, string packageId, PackageUpdateMode updateMode)
         {
             bool appliesToProject;
             IPackage package = FindLocalPackageForUpdate(projectManager, packageId, out appliesToProject);
-            return VersionUtility.GetSafeRange(package.Version);
+            return VersionUtility.GetUpgradeVersionSpec(package.Version, updateMode);
         }
     }
 }

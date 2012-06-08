@@ -347,44 +347,32 @@ namespace NuGet
             return true;
         }
 
-        /// <summary>
-        /// The minor upgrade range is defined as the highest minor, build and revision for a given major version
-        /// </summary>
-        public static IVersionSpec GetMinorUpgradeRange(SemanticVersion version)
+        public static IVersionSpec GetUpgradeVersionSpec(SemanticVersion version, PackageUpdateMode updateMode)
         {
-            return new VersionSpec
+            var spec = new VersionSpec
             {
                 IsMinInclusive = false,
                 IsMaxInclusive = false,
                 MinVersion = version,
-                MaxVersion = new SemanticVersion(new Version(version.Version.Major + 1, 0))
             };
-        }
 
-        /// <summary>
-        /// The safe range is defined as the highest build and revision for a given major and minor version
-        /// </summary>
-        public static IVersionSpec GetSafeRange(SemanticVersion version)
-        {
-            return new VersionSpec
+            switch (updateMode)
             {
-                IsMinInclusive = false,
-                MinVersion = version,
-                MaxVersion = new SemanticVersion(new Version(version.Version.Major, version.Version.Minor + 1))
-            };
-        }
+                case PackageUpdateMode.Minor:
+                    spec.MaxVersion = new SemanticVersion(new Version(version.Version.Major + 1, 0));
+                    break;
+                case PackageUpdateMode.Safe:
+                    spec.MaxVersion = new SemanticVersion(new Version(version.Version.Major, version.Version.Minor + 1));
+                    break;
+                case PackageUpdateMode.Newest:
+                    spec.IsMaxInclusive = true;
+                    break;
+                default:
+                    // TODO: resx
+                    throw new ArgumentException("Unsupported PackageUpdateMode " + updateMode, "updateMode");
+            }
 
-        /// <summary>
-        /// Returns a version range that matches any higher version than the <paramref name="version"/> passed in.
-        /// </summary>
-        public static IVersionSpec GetUpgradeRange(SemanticVersion version)
-        {
-            return new VersionSpec
-            {
-                IsMinInclusive = false,
-                MinVersion = version,
-                IsMaxInclusive = true,
-            };
+            return spec;
         }
 
         public static string PrettyPrint(IVersionSpec versionSpec)

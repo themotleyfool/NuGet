@@ -304,21 +304,20 @@ namespace NuGet.Commands
                         // If the user explicitly allows prerelease or if the package being updated is prerelease we'll include prerelease versions in our list of packages
                         // being considered for an update.
                         bool allowPrerelease = Prerelease || !package.IsReleaseVersion();
-                        IVersionSpec upgradeRange;
+                        
+                        PackageUpdateMode updateMode = PackageUpdateMode.Newest;
+
                         if (Safe)
                         {
-                            upgradeRange = VersionUtility.GetSafeRange(package.Version);
+                            updateMode = PackageUpdateMode.Safe;
                         }
                         else if (Minor)
                         {
-                            upgradeRange = VersionUtility.GetMinorUpgradeRange(package.Version);
+                            updateMode = PackageUpdateMode.Minor;
                         }
-                        else
-                        {
-                            upgradeRange = VersionUtility.GetUpgradeRange(package.Version);
-                        }
-                        
-                        projectManager.UpdatePackageReference(package.Id, upgradeRange, updateDependencies: true, allowPrereleaseVersions: allowPrerelease);
+
+                        var spec = VersionUtility.GetUpgradeVersionSpec(package.Version, updateMode);
+                        projectManager.UpdatePackageReference(package.Id, spec, updateDependencies: true, allowPrereleaseVersions: allowPrerelease);
                     }
                     catch (InvalidOperationException e)
                     {
