@@ -83,7 +83,7 @@ namespace NuGet.PowerShell.Commands
                 SubscribeToProgressEvents();
                 if (PackageManager != null)
                 {
-                    using (PackageManager.SourceRepository.StartOperation(RepositoryOperationNames.Install))
+                    using (StartOperation(RepositoryOperationNames.Install))
                     {
                         PackageManager.InstallPackage(ProjectManager, Id, Version, ignoreDependencies: IgnoreDependencies, allowPrereleaseVersions: IncludePrerelease.IsPresent,
                             logger: this);

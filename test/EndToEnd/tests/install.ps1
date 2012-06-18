@@ -1589,7 +1589,7 @@ function Test-InstallingSatellitePackageCopiesFilesIntoRuntimePackageFolderWhenR
     $solutionDir = Get-SolutionDir
 
     # Act (PackageWithStrongNamedLib is version 1.1, even though the file name is 1.0)
-    $p | Install-Package PackageWithStrongNamedLib.ja-jp -Source $context.RepositoryRoot
+    $p | Install-Package PackageWithStrongNamedLib.ja-jp -Source $context.RepositoryPath
 
     # Assert (the resources from the satellite package are copied into the runtime package's folder)
     Assert-PathExists (Join-Path $solutionDir packages\PackageWithStrongNamedLib.1.1\lib\ja-jp\Core.resources.dll)
@@ -1607,8 +1607,8 @@ function Test-InstallingSatellitePackageCopiesFilesIntoRuntimePackageFolderWhenR
     $solutionDir = Get-SolutionDir
 
     # Act (PackageWithStrongNamedLib is version 1.1, even though the file name is 1.0)
-    $p | Install-Package PackageWithStrongNamedLib -Source $context.RepositoryRoot
-    $p | Install-Package PackageWithStrongNamedLib.ja-jp -Source $context.RepositoryRoot
+    $p | Install-Package PackageWithStrongNamedLib -Source $context.RepositoryPath
+    $p | Install-Package PackageWithStrongNamedLib.ja-jp -Source $context.RepositoryPath
 
     # Assert (the resources from the satellite package are copied into the runtime package's folder)
     Assert-PathExists (Join-Path $solutionDir packages\PackageWithStrongNamedLib.1.1\lib\ja-jp\Core.resources.dll)
@@ -1626,7 +1626,7 @@ function Test-InstallingSatellitePackageOnlyCopiesCultureSpecificLibFolderConten
     $solutionDir = Get-SolutionDir
 
     # Act (PackageWithStrongNamedLib is version 1.1, even though the file name is 1.0)
-    $p | Install-Package PackageWithStrongNamedLib.ja-jp -Source $context.RepositoryRoot
+    $p | Install-Package PackageWithStrongNamedLib.ja-jp -Source $context.RepositoryPath
 
     # Assert (the resources from the satellite package are copied into the runtime package's folder)
     Assert-PathNotExists (Join-Path $solutionDir packages\PackageWithStrongNamedLib.1.1\RootFile.txt)
@@ -1918,4 +1918,27 @@ function Test-ToolsPathForInitAndInstallScriptPointToToolsFolder
 
 	# Assert
 	Assert-Package $p 'packageA'
+}
+
+function Test-InstallFailCleansUpSatellitePackageFiles 
+{
+	# Verification for work item 2311
+	param ($context)
+
+	# Arrange
+	$p = New-ClassLibrary
+
+	# Act 
+	$p | Install-Package A -Version 1.2.0 -Source $context.RepositoryPath
+	try {
+		$p | Install-Package A.fr -Source $context.RepositoryPath
+	} catch {}
+
+	# Assert
+	Assert-Package $p A 1.2.0
+
+	$solutionDir = Get-SolutionDir
+	Assert-PathExists (Join-Path $solutionDir 'packages\A.1.2.0\')
+	Assert-PathNotExists (Join-Path $solutionDir 'packages\A.1.0.0\')
+	Assert-PathNotExists (Join-Path $solutionDir 'packages\A.fr.1.0.0\')
 }

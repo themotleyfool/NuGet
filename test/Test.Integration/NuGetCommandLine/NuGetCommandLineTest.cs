@@ -366,6 +366,327 @@ namespace NuGet.Test.Integration.NuGetCommandLine
         }
 
         [Fact]
+        public void PackageCommand_NotSpecfingFilesElementPackagesEmptyFrameworkFolderInContent()
+        {
+            // Arrange            
+            string nuspecFile = Path.Combine("wow", "SpecWithFiles.nuspec");
+            string expectedPackage = "test.1.1.1.nupkg";
+            Directory.CreateDirectory("wow\\content");
+            Directory.CreateDirectory("wow\\content\\net40");
+            File.WriteAllText("wow\\content\\file1.txt", "file 1");
+            File.WriteAllText("wow\\content\\file2.txt", "file 2");
+            File.WriteAllText(nuspecFile, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package>
+  <metadata>
+    <id>test</id>
+    <version>1.1.1</version>
+    <authors>Luan</authors>
+    <description>Very cool.</description>
+    <language>en-US</language>
+  </metadata>
+</package>");
+            string[] args = new string[] { "pack"};
+            Directory.SetCurrentDirectory("wow");
+
+            // Act
+            int result = Program.Main(args);
+
+            // Assert
+            Assert.Equal(0, result);
+            Assert.True(consoleOutput.ToString().Contains("Successfully created package"));
+            Assert.True(File.Exists(expectedPackage));
+
+            VerifyPackageContents(expectedPackage, new[] { @"content\file1.txt", @"content\file2.txt", @"content\net40\_._" });
+        }
+
+        [Fact]
+        public void PackageCommand_NotSpecfingFilesElementPackagesEmptyFrameworkFolderInLib()
+        {
+            // Arrange            
+            string nuspecFile = Path.Combine("mir", "SpecWithFiles.nuspec");
+            string expectedPackage = "test.1.1.1.nupkg";
+            Directory.CreateDirectory(Path.Combine("mir", "lib"));
+            Directory.CreateDirectory(Path.Combine("mir", "lib", "net40"));
+            File.WriteAllText(Path.Combine("mir", "lib\\file1.txt"), "file 1");
+            File.WriteAllText(Path.Combine("mir", "lib\\file2.txt"), "file 2");
+            File.WriteAllText(nuspecFile, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package>
+  <metadata>
+    <id>test</id>
+    <version>1.1.1</version>
+    <authors>Luan</authors>
+    <description>Very cool.</description>
+    <language>en-US</language>
+  </metadata>
+</package>");
+            string[] args = new string[] { "pack" };
+            Directory.SetCurrentDirectory("mir");
+
+            // Act
+            int result = Program.Main(args);
+
+            // Assert
+            Assert.Equal(0, result);
+            Assert.True(consoleOutput.ToString().Contains("Successfully created package"));
+            Assert.True(File.Exists(expectedPackage));
+
+            VerifyPackageContents(expectedPackage, new[] { @"lib\file1.txt", @"lib\file2.txt", @"lib\net40\_._" });
+        }
+
+        [Fact]
+        public void PackageCommand_NotSpecfingFilesElementDoesNotPackageEmptyFrameworkFolderIfExcludeEmptyDirectoriesIsSet()
+        {
+            // Arrange            
+            string nuspecFile = Path.Combine("bar", "SpecWithFiles.nuspec");
+            string expectedPackage = "test.1.1.1.nupkg";
+            Directory.CreateDirectory(Path.Combine("bar", "content"));
+            Directory.CreateDirectory(Path.Combine("bar", "content", "net40"));
+            File.WriteAllText(Path.Combine("bar", "content\\file1.txt"), "file 1");
+            File.WriteAllText(Path.Combine("bar", "content\\file2.txt"), "file 2");
+            File.WriteAllText(nuspecFile, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package>
+  <metadata>
+    <id>test</id>
+    <version>1.1.1</version>
+    <authors>Luan</authors>
+    <description>Very cool.</description>
+    <language>en-US</language>
+  </metadata>
+</package>");
+            string[] args = new string[] { "pack", "-ExcludeEmptyDirectories" };
+            Directory.SetCurrentDirectory("bar");
+
+            // Act
+            int result = Program.Main(args);
+
+            // Assert
+            Assert.Equal(0, result);
+            Assert.True(consoleOutput.ToString().Contains("Successfully created package"));
+            Assert.True(File.Exists(expectedPackage));
+
+            VerifyPackageContents(expectedPackage, new[] { @"content\file1.txt", @"content\file2.txt"});
+        }
+
+        [Fact]
+        public void PackageCommand_FilesElementSearchIncludesEmptyFrameworkFolders()
+        {
+            // Arrange            
+            string nuspecFile = Path.Combine("cat", "SpecWithFiles.nuspec");
+            string expectedPackage = "test.1.1.1.nupkg";
+            Directory.CreateDirectory(Path.Combine("cat", "content"));
+            Directory.CreateDirectory(Path.Combine("cat", "content", "sl40"));
+            File.WriteAllText(Path.Combine("cat", "content\\file1.txt"), "file 1");
+            File.WriteAllText(Path.Combine("cat", "content\\file2.txt"), "file 2");
+            File.WriteAllText(nuspecFile, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package>
+  <metadata>
+    <id>test</id>
+    <version>1.1.1</version>
+    <authors>Luan</authors>
+    <description>Very cool.</description>
+    <language>en-US</language>
+  </metadata>
+  <files>
+     <file src=""**\*"" />
+  </files>
+</package>");
+            string[] args = new string[] { "pack" };
+            Directory.SetCurrentDirectory("cat");
+
+            // Act
+            int result = Program.Main(args);
+
+            // Assert
+            Assert.Equal(0, result);
+            Assert.True(consoleOutput.ToString().Contains("Successfully created package"));
+            Assert.True(File.Exists(expectedPackage));
+
+            VerifyPackageContents(expectedPackage, new[] { @"content\file1.txt", @"content\file2.txt", @"content\sl40\_._" });
+        }
+
+        [Fact]
+        public void PackageCommand_FilesElementSearchDoesNotIncludeEmptyFrameworkFoldersIfExcludeEmptyDirectoriesIsSet()
+        {
+            // Arrange            
+            string nuspecFile = Path.Combine("ohm", "SpecWithFiles.nuspec");
+            string expectedPackage = "test.1.1.1.nupkg";
+            Directory.CreateDirectory(Path.Combine("ohm", "content"));
+            Directory.CreateDirectory(Path.Combine("ohm", "content", "sl40"));
+            File.WriteAllText(Path.Combine("ohm", "content\\file1.txt"), "file 1");
+            File.WriteAllText(Path.Combine("ohm", "content\\file2.txt"), "file 2");
+            File.WriteAllText(nuspecFile, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package>
+  <metadata>
+    <id>test</id>
+    <version>1.1.1</version>
+    <authors>Luan</authors>
+    <description>Very cool.</description>
+    <language>en-US</language>
+  </metadata>
+  <files>
+     <file src=""**\*"" />
+  </files>
+</package>");
+            string[] args = new string[] { "pack", "-ExcludeEmptyDirectories" };
+            Directory.SetCurrentDirectory("ohm");
+
+            // Act
+            int result = Program.Main(args);
+
+            // Assert
+            Assert.Equal(0, result);
+            Assert.True(consoleOutput.ToString().Contains("Successfully created package"));
+            Assert.True(File.Exists(expectedPackage));
+
+            VerifyPackageContents(expectedPackage, new[] { @"content\file1.txt", @"content\file2.txt" });
+        }
+
+        [Fact]
+        public void PackageCommand_FilesElementSearchDoesNotIncludeEmptyFrameworkFoldersIfExcluded()
+        {
+            // Arrange            
+            string nuspecFile = Path.Combine("pam", "SpecWithFiles.nuspec");
+            string expectedPackage = "test.1.1.1.nupkg";
+            Directory.CreateDirectory(Path.Combine("pam", "content"));
+            Directory.CreateDirectory(Path.Combine("pam", "content", "sl40"));
+            File.WriteAllText(Path.Combine("pam", "content\\file1.txt"), "file 1");
+            File.WriteAllText(Path.Combine("pam", "content\\file2.txt"), "file 2");
+            File.WriteAllText(nuspecFile, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package>
+  <metadata>
+    <id>test</id>
+    <version>1.1.1</version>
+    <authors>Luan</authors>
+    <description>Very cool.</description>
+    <language>en-US</language>
+  </metadata>
+  <files>
+     <file src=""**\*"" />
+  </files>
+</package>");
+            string[] args = new string[] { "pack", "-Exclude", @"content\sl*" };
+            Directory.SetCurrentDirectory("pam");
+
+            // Act
+            int result = Program.Main(args);
+
+            // Assert
+            Assert.Equal(0, result);
+            Assert.True(consoleOutput.ToString().Contains("Successfully created package"));
+            Assert.True(File.Exists(expectedPackage));
+
+            VerifyPackageContents(expectedPackage, new[] { @"content\file1.txt", @"content\file2.txt" });
+        }
+
+        [Fact]
+        public void PackageCommand_FilesElementSearchDoesNotIncludeEmptyFrameworkFoldersIfSearchPatternDoesNotMatch()
+        {
+            // Arrange            
+            string nuspecFile = Path.Combine("nay", "SpecWithFiles.nuspec");
+            string expectedPackage = "test.1.1.1.nupkg";
+            Directory.CreateDirectory(Path.Combine("nay", "content"));
+            Directory.CreateDirectory(Path.Combine("nay", "content", "sl40"));
+            File.WriteAllText(Path.Combine("nay", "content\\file1.txt"), "file 1");
+            File.WriteAllText(Path.Combine("nay", "content\\file2.txt"), "file 2");
+            File.WriteAllText(nuspecFile, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package>
+  <metadata>
+    <id>test</id>
+    <version>1.1.1</version>
+    <authors>Luan</authors>
+    <description>Very cool.</description>
+    <language>en-US</language>
+  </metadata>
+  <files>
+     <file src=""**\*.*"" />
+  </files>
+</package>");
+            string[] args = new string[] { "pack" };
+            Directory.SetCurrentDirectory("nay");
+
+            // Act
+            int result = Program.Main(args);
+
+            // Assert
+            Assert.Equal(0, result);
+            Assert.True(consoleOutput.ToString().Contains("Successfully created package"));
+            Assert.True(File.Exists(expectedPackage));
+
+            VerifyPackageContents(expectedPackage, new[] { @"content\file1.txt", @"content\file2.txt" });
+        }
+
+        [Fact]
+        public void PackageCommand_FilesElementSearchDoesNotIncludeEmptyFrameworkFoldersIfSearchPatternDoesNotMatch2()
+        {
+            // Arrange            
+            string nuspecFile = Path.Combine("qaw", "SpecWithFiles.nuspec");
+            string expectedPackage = "test.1.1.1.nupkg";
+            Directory.CreateDirectory(Path.Combine("qaw", "content"));
+            Directory.CreateDirectory(Path.Combine("qaw", "content", "winrt"));
+            File.WriteAllText(Path.Combine("qaw", "content\\file1.txt"), "file 1");
+            File.WriteAllText(Path.Combine("qaw", "content\\file2.txt"), "file 2");
+            File.WriteAllText(nuspecFile, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package>
+  <metadata>
+    <id>test</id>
+    <version>1.1.1</version>
+    <authors>Luan</authors>
+    <description>Very cool.</description>
+    <language>en-US</language>
+  </metadata>
+  <files>
+     <file src=""**\file*"" />
+  </files>
+</package>");
+            string[] args = new string[] { "pack" };
+            Directory.SetCurrentDirectory("qaw");
+
+            // Act
+            int result = Program.Main(args);
+
+            // Assert
+            Assert.Equal(0, result);
+            Assert.True(consoleOutput.ToString().Contains("Successfully created package"));
+            Assert.True(File.Exists(expectedPackage));
+
+            VerifyPackageContents(expectedPackage, new[] { @"content\file1.txt", @"content\file2.txt" });
+        }
+
+        [Fact]
+        public void PackageCommand_NotSpecfingFilesElementDoesNotPackageEmptyNormalFolder()
+        {
+            // Arrange            
+            string nuspecFile = Path.Combine("lil", "SpecWithFiles.nuspec");
+            string expectedPackage = "test.1.1.1.nupkg";
+            Directory.CreateDirectory(Path.Combine("lil", "content"));
+            Directory.CreateDirectory(Path.Combine("lil", "content", "abc"));
+            File.WriteAllText(Path.Combine("lil", "content\\file1.txt"), "file 1");
+            File.WriteAllText(Path.Combine("lil", "content\\file2.txt"), "file 2");
+            File.WriteAllText(nuspecFile, @"<?xml version=""1.0"" encoding=""utf-8""?>
+<package>
+  <metadata>
+    <id>test</id>
+    <version>1.1.1</version>
+    <authors>Luan</authors>
+    <description>Very cool.</description>
+    <language>en-US</language>
+  </metadata>
+</package>");
+            string[] args = new string[] { "pack" };
+            Directory.SetCurrentDirectory("lil");
+
+            // Act
+            int result = Program.Main(args);
+
+            // Assert
+            Assert.Equal(0, result);
+            Assert.True(consoleOutput.ToString().Contains("Successfully created package"));
+            Assert.True(File.Exists(expectedPackage));
+
+            VerifyPackageContents(expectedPackage, new[] { @"content\file1.txt", @"content\file2.txt"});
+        }
+
+        [Fact]
         public void PackageCommand_SpecifyingEmptyFilesElementInNuspecPackagesNoFiles()
         {
             // Arrange            

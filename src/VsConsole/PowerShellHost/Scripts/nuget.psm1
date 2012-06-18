@@ -48,26 +48,14 @@ Register-TabExpansion 'Get-Package' @{
 Register-TabExpansion 'Install-Package' @{
     'Id' = {
         param($context)
-
-        GetPackageIds (GetPackages $context)
+        GetRemotePackageIds $context
     }
     'ProjectName' = {
         GetProjectNames
     }
     'Version' = {
         param($context)
-
-        $parameters = @{}
-
-        if ($context.Id) { $parameters.filter = $context.Id }
-        if ($context.Source) { $parameters.source = $context.Source }
-        if (IsPrereleaseSet $context) {
-            $parameters.IncludePreRelease = $true 
-        }
-
-        $parameters.Remote = $true
-        $parameters.AllVersions = $true
-        GetPackageVersions $parameters $context 
+        GetRemotePackageVersions $context
     }
     'Source' = {
         GetPackageSources
@@ -77,31 +65,21 @@ Register-TabExpansion 'Install-Package' @{
 Register-TabExpansion 'Uninstall-Package' @{
     'Id' = {
         param($context)
-
-        $parameters = @{}
-        if ($context.id) { $parameters.filter = $context.id }
-
-        GetPackageIds (Find-Package @parameters -ErrorAction SilentlyContinue)
+        GetInstalledPackageIds $context
     }
     'ProjectName' = {
         GetProjectNames
     }
     'Version' = {
         $parameters = @{}
-        if ($context.id) { $parameters.filter = $context.id }
-
-        GetPackageVersions $parameters $context
+        GetInstalledPackageVersions $parameters $context
     }
 }
 
 Register-TabExpansion 'Update-Package' @{
     'Id' = {
         param($context)
-
-        $parameters = @{}
-        if ($context.id) { $parameters.filter = $context.id }
-
-        GetPackageIds (Find-Package @parameters -ErrorAction SilentlyContinue)
+        GetInstalledPackageIds $context
     }
     'ProjectName' = {
         GetProjectNames
@@ -109,26 +87,23 @@ Register-TabExpansion 'Update-Package' @{
     'Version' = {
         param($context)
 
-        $parameters = @{}
-
         # Only show available versions if an id was specified
         if ($context.id) { 
-            if ($context.Source) { $parameters.source = $context.Source }
-
             # Find the installed package (this might be nothing since we could hav a partial id)
+            $versions = @()
             $packages = @(Get-Package $context.id | ?{ $_.Id -eq $context.id })
-
-            $parameters.filter = $context.id 
-            $parameters.Remote = $true
-            $parameters.AllVersions = $true
-            if (IsPrereleaseSet $context) {
-                $parameters.IncludePreRelease = $true 
-            }
-
-            $versions = GetPackageVersions $parameters $context
 
             if($packages.Count) {
                 $package = @($packages | Sort-Object Version)[0]
+
+                $parameters = @{}
+                if ($context.Source) { $parameters.source = $context.Source }
+                $parameters.id = $package.id 
+                if (IsPrereleaseSet $context) {
+	                $parameters.IncludePreRelease = $true 
+                }
+
+                $versions = GetRemotePackageVersions $parameters
 
                 # Only show versions that are higher than the lowest installed version
                 $versions = $versions | ?{ $_ -gt $package.Version }
@@ -145,19 +120,11 @@ Register-TabExpansion 'Update-Package' @{
 Register-TabExpansion 'Open-PackagePage' @{
     'Id' = {
         param($context)
-        GetPackageIds (GetPackages $context)
+        GetRemotePackageIds $context
     }
     'Version' = {
         param($context)
-
-        $parameters = @{}
-
-        if ($context.Id) { $parameters.filter = $context.Id }
-        if ($context.Source) { $parameters.source = $context.Source }
-
-        $parameters.Remote = $true
-        $parameters.AllVersions = $true
-        GetPackageVersions $parameters $context 
+        GetRemotePackageVersions $context
     }
     'Source' = {
         GetPackageSources
@@ -197,8 +164,30 @@ function GetProjectNames {
     ($uniqueNames + $safeNames) | Select-Object -Unique | Sort-Object
 }
 
-function GetPackageIds($packages) {
-    $packages | Select-Object -ExpandProperty Id -Unique
+function GetInstalledPackageIds($context) {
+    $parameters = @{}
+    
+    if ($context.Id) { $parameters.filter = $context.id }
+
+    Find-Package @parameters -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Id -Unique
+}
+
+function GetRemotePackageIds($context) {
+    $parameters = @{}
+
+    if ($context.Id) { $parameters.filter = $context.Id }
+    if ($context.Source) { $parameters.source = $context.Source }
+    if (IsPrereleaseSet $context) {
+        $parameters.includePrerelease = $true 
+    }
+
+    try {
+		return Get-RemotePackageId @parameters
+    }
+    catch {
+        # If the server doesn't have the JSON API endpoints, get the remote package IDs the old way.
+        return GetPackages $context | Select-Object -ExpandProperty Id -Unique
+    }
 }
 
 function GetPackageSources() {
@@ -206,9 +195,44 @@ function GetPackageSources() {
     $allSources | Select-Object -ExpandProperty Name
 }
 
-function GetPackageVersions($parameters, $context) {
-    Find-Package @parameters -ExactMatch -ErrorAction SilentlyContinue | Select -ExpandProperty Version | %{
-        # Convert to version if the we're looking at the version as a string
+function GetInstalledPackageVersions($context) {
+    $parameters = @{}
+    if ($context.id) { $parameters.filter = $context.id }
+    GetAndSortVersions(Find-Package @parameters -ExactMatch -ErrorAction SilentlyContinue)
+}
+
+function GetRemotePackageVersions($context) {
+    $parameters = @{}
+
+    if ($context.Id -eq $null) {
+        return @()
+    }
+
+    if ($context.Id) { $parameters.id = $context.Id }
+    if ($context.Source) { $parameters.source = $context.Source }
+    if (IsPrereleaseSet $context) {
+        $parameters.IncludePreRelease = $true 
+    }
+
+    try {
+	    return Get-RemotePackageVersion @parameters | %{ [NuGet.SemanticVersion]::Parse($_) } | Sort-Object -Descending
+    }
+    catch {
+	    # If the server doesn't have the JSON API endpoints, get the remote package versions the old way.
+        $parameters = @{}
+        if ($context.Id) { $parameters.filter = $context.Id }
+        if ($context.Source) { $parameters.source = $context.Source }
+        if (IsPrereleaseSet $context) {
+            $parameters.IncludePreRelease = $true 
+        }
+        $parameters.Remote = $true
+        $parameters.AllVersions = $true
+        GetAndSortVersions(Find-Package @parameters -ExactMatch -ErrorAction SilentlyContinue)
+    }
+}
+
+function GetAndSortVersions($packages) {
+    $packages | Select -Unique -ExpandProperty Version | %{
         if($_ -is [string]) { 
             [NuGet.SemanticVersion]::Parse($_) 
         } else { 

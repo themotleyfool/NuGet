@@ -5,7 +5,7 @@ namespace NuGet
 {
     public class PackageRestoreConsent
     {
-        internal const string EnvironmentVariableName = "EnableNuGetPackageRestore";
+        private const string EnvironmentVariableName = "EnableNuGetPackageRestore";
         private const string PackageRestoreSection = "packageRestore";
         private const string PackageRestoreConsentKey = "enabled";
         private readonly ISettings _settings;
@@ -35,28 +35,39 @@ namespace NuGet
         {
             get
             {
-                string value = _settings.GetValue(PackageRestoreSection, PackageRestoreConsentKey).SafeTrim();
-                if (String.IsNullOrEmpty(value))
-                {
-                    value = _environmentReader.GetEnvironmentVariable(EnvironmentVariableName).SafeTrim();
-                }
+                string envValue = _environmentReader.GetEnvironmentVariable(EnvironmentVariableName).SafeTrim();
+                return IsGrantedInSettings || IsSet(envValue);
+            }
+        }
 
-                if (!String.IsNullOrEmpty(value))
-                {
-                    bool boolResult;
-                    int intResult;
-
-                    return
-                       (Boolean.TryParse(value, out boolResult) && boolResult) ||
-                       (Int32.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out intResult) && (intResult == 1));
-                }
-
-                return false;
+        public bool IsGrantedInSettings
+        {
+            get
+            {
+                string settingsValue = _settings.GetValue(PackageRestoreSection, PackageRestoreConsentKey).SafeTrim();
+                return IsSet(settingsValue);
             }
             set
             {
-                _settings.SetValue(PackageRestoreSection, PackageRestoreConsentKey, value.ToString());
+                if (!value)
+                {
+                    _settings.DeleteSection(PackageRestoreSection);
+                }
+                else
+                {
+                    _settings.SetValue(PackageRestoreSection, PackageRestoreConsentKey, value.ToString());
+                }
             }
+        }
+
+        private static bool IsSet(string value)
+        {
+            bool boolResult;
+            int intResult;
+
+            return !String.IsNullOrEmpty(value) &&
+                   ((Boolean.TryParse(value, out boolResult) && boolResult) ||
+                   (Int32.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out intResult) && (intResult == 1)));
         }
     }
 }

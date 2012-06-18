@@ -42,6 +42,8 @@ namespace NuGet.Test
         [Theory]
         [InlineData("1")]
         [InlineData("true")]
+        [InlineData("1 ")]
+        [InlineData(" TRUE")]
         public void CorrectSettingsValueReturnsTrueForIsGranted(string settingsValue)
         {
             // Arrange
@@ -53,9 +55,11 @@ namespace NuGet.Test
 
             // Act
             bool isGranted = packageRestore.IsGranted;
+            bool isGrantedInSettings = packageRestore.IsGrantedInSettings;
 
             // Assert
             Assert.True(isGranted);
+            Assert.True(isGrantedInSettings);
         }
 
         [Theory]
@@ -64,14 +68,14 @@ namespace NuGet.Test
         public void InCorrectEnvironmentVariableReturnsFalseForIsGranted(string environmentValue)
         {
             // Arrange
-            var settings = new Mock<ISettings>();
+            var settings = Mock.Of<ISettings>();
 
             var environmentReader = new Mock<IEnvironmentVariableReader>();
             environmentReader.Setup(
                 r => r.GetEnvironmentVariable("EnableNuGetPackageRestore")).
                 Returns(environmentValue);
 
-            var packageRestore = new PackageRestoreConsent(settings.Object, environmentReader.Object);
+            var packageRestore = new PackageRestoreConsent(settings, environmentReader.Object);
 
             // Act
             bool isGranted = packageRestore.IsGranted;
@@ -107,16 +111,40 @@ namespace NuGet.Test
         }
 
         [Theory]
+        [InlineData("1", "")]
+        [InlineData("", "1")]
+        [InlineData("0", "1")]
+        [InlineData("false", "true")]
+        [InlineData("true", "false")]
+        public void GrantingConsentInEitherSettingOrEnvironmentGrantsConsent(string settingsValue, string environmentValue)
+        {
+            // Arrange
+            var settings = new Mock<ISettings>();
+            var environmentReader = new Mock<IEnvironmentVariableReader>(); 
+            
+            settings.Setup(s => s.GetValue("packageRestore", "enabled")).Returns(settingsValue);
+            environmentReader.Setup(r => r.GetEnvironmentVariable("EnableNuGetPackageRestore")).Returns(environmentValue);
+
+            var packageRestore = new PackageRestoreConsent(settings.Object, environmentReader.Object);
+
+            // Act
+            bool isGranted = packageRestore.IsGranted;
+
+            // Assert
+            Assert.True(isGranted);
+        }
+
+        [Theory]
         [InlineData("", null, false)]
         [InlineData("  ", null, false)]
-        [InlineData("0", "true", false)]
+        [InlineData("0", "abcd", false)]
         [InlineData("blah", null, false)]
         [InlineData("", "false", false)]
         [InlineData("   ", "false", false)]
         [InlineData("   ", "0", false)]
         [InlineData("", "true", true)]
         [InlineData("   ", "true", true)]
-        [InlineData("blah", "true", false)]
+        [InlineData("blah", "false", false)]
         public void IsGrantedFallsBackToEnvironmentVariableIfSettingsValueIsEmptyOfWhitespaceString(string settingsValue, string environmentValue, bool expected)
         {
             // Arrange
@@ -132,9 +160,11 @@ namespace NuGet.Test
 
             // Act
             bool isGranted = packageRestore.IsGranted;
+            bool isGrantedInSettings = packageRestore.IsGrantedInSettings;
 
             // Assert
             Assert.Equal(expected, isGranted);
+            Assert.False(isGrantedInSettings);
         }
 
         [Fact]
@@ -148,10 +178,10 @@ namespace NuGet.Test
             var packageRestore = new PackageRestoreConsent(settings.Object, environmentReader.Object);
 
             // Act
-            packageRestore.IsGranted = false;
+            packageRestore.IsGrantedInSettings = false;
 
             // Assert
-            settings.Verify(s => s.SetValue("packageRestore", "enabled", "False"), Times.Once());
+            settings.Verify(s => s.DeleteSection("packageRestore"), Times.Once());
         }
 
         [Fact]
@@ -165,7 +195,7 @@ namespace NuGet.Test
             var packageRestore = new PackageRestoreConsent(settings.Object, environmentReader.Object);
 
             // Act
-            packageRestore.IsGranted = true;
+            packageRestore.IsGrantedInSettings = true;
 
             // Assert
             settings.Verify(s => s.SetValue("packageRestore", "enabled", "True"), Times.Once());

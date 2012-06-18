@@ -20,6 +20,8 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Management.Automation, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL" />
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.XML" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\..\Common\CommonAssemblyInfo.cs">
@@ -29,12 +31,15 @@
       <Link>CommonResources.cs</Link>
     </Compile>
     <Compile Include="AddBindingRedirectCommand.cs" />
+    <Compile Include="GetRemotePackageVersionCommand.cs" />
+    <Compile Include="GetRemotePackageIdCommand.cs" />
     <Compile Include="FindPackageCommand.cs" />
     <Compile Include="GetPackageCommand.cs" />
     <Compile Include="GetProjectCommand.cs" />
     <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="IErrorHandler.cs" />
     <Compile Include="InstallPackageCommand.cs" />
+    <Compile Include="JsonApiCommandBase.cs" />
     <Compile Include="NuGetBaseCommand.cs" />
     <Compile Include="NuGetErrorId.cs" />
     <Compile Include="OpenPackagePageCommand.cs" />

@@ -115,9 +115,9 @@ namespace NuGet.PowerShell.Commands
 
             try
             {
-                using (PackageManager.SourceRepository.StartOperation(RepositoryOperationNames.Update))
+                IProjectManager projectManager = ProjectManager;
+                using (StartOperation(RepositoryOperationNames.Update))
                 {
-                    IProjectManager projectManager = ProjectManager;
                     if (!String.IsNullOrEmpty(Id))
                     {
                         // If a package id was specified, but no project was specified, then update this package in all projects

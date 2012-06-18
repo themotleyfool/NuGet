@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Xml;
 using NuGet;
 
@@ -36,7 +37,8 @@ namespace Bootstrapper
                     RunProcess(processInfo);
                     File.SetLastWriteTimeUtc(exePath, DateTime.UtcNow);
                 }
-                processInfo.Arguments = ParseArgs();
+                // Convert the args list to a command line input. If an argument has any spaces in it, we need to wrap it with single quotes.
+                processInfo.Arguments = String.Join(" ", args.Select(arg => arg.Any(Char.IsWhiteSpace) ? "'" + arg + "'" : arg));
                 RunProcess(processInfo);
                 return 0;
             }
@@ -63,6 +65,16 @@ namespace Bootstrapper
         private static void EnsurePackageRestoreConsent(XmlDocument document)
         {
             // Addressing this later.
+            var node = document != null ? document.SelectSingleNode(@"configuration/packageRestore/add[@key='enabled']/@value") : null;
+            var settingsValue = node != null ? node.Value.Trim() : "";
+            var envValue = (Environment.GetEnvironmentVariable("EnableNuGetPackageRestore") ?? String.Empty).Trim();
+
+            bool consent =  settingsValue.Equals("true", StringComparison.OrdinalIgnoreCase) || settingsValue == "1" ||
+                            envValue.Equals("true", StringComparison.OrdinalIgnoreCase) || envValue == "1";
+            if (!consent)
+            {
+                throw new InvalidOperationException(LocalizedResourceManager.GetString("RestoreConsent"));
+            }
         }
 
         private static void RunProcess(ProcessStartInfo processInfo)
@@ -71,21 +83,6 @@ namespace Bootstrapper
             {
                 process.WaitForExit();
             }
-        }
-
-        private static string ParseArgs()
-        {
-            // Extract the arguments to be passed to the actual NuGet.exe
-            // The first argument of GetCommandLineArgs is the current exe. 
-            string exePath = Environment.GetCommandLineArgs()[0];
-
-            // Find the first occurence of the exe in the CommandLine string.
-            int exeIndex = Environment.CommandLine.IndexOf(exePath);
-
-            // The first space that follows after the exe's path is the beginning of the remaining arguments.
-            int argsStartIndex = Environment.CommandLine.IndexOf(' ', exeIndex + exePath.Length);
-
-            return Environment.CommandLine.Substring(argsStartIndex + 1);
         }
 
         private static void WriteError(Exception e)

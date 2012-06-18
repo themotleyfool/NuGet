@@ -524,13 +524,13 @@ namespace NuGetConsole.Host.PowerShell.Implementation
 
         public override void WriteErrorLine(string value)
         {
-            WriteLine(value, ConsoleColor.Red);
+            WriteLine(value, foregroundColor: ConsoleColor.White, backgroundColor: ConsoleColor.Red);
         }
 
         public override void WriteProgress(long sourceId, ProgressRecord record)
         {
             string operation = record.CurrentOperation ?? record.StatusDescription;
-            if (!String.IsNullOrEmpty(operation)) 
+            if (!String.IsNullOrEmpty(operation))
             {
                 Console.WriteProgress(operation, record.PercentComplete);
             }
@@ -543,7 +543,7 @@ namespace NuGetConsole.Host.PowerShell.Implementation
 
         public override void WriteWarningLine(string message)
         {
-            WriteLine(message, ConsoleColor.Magenta);
+            WriteLine(message, foregroundColor: ConsoleColor.Black, backgroundColor: ConsoleColor.Yellow);
         }
     }
 }
