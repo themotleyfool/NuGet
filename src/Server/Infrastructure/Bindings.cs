@@ -19,7 +19,7 @@ namespace NuGet.Server.Infrastructure
             var packageRepository = new LucenePackageRepository(packagePathResolver, fileSystem);
 
             Bind<IHashProvider>().To<CryptoHashProvider>();
-            
+
             Bind<IFileSystem>().ToConstant(fileSystem);
             Bind<IPackagePathResolver>().ToConstant(packagePathResolver);
             Bind<IServerPackageRepository>().ToConstant(packageRepository);
@@ -45,6 +45,8 @@ namespace NuGet.Server.Infrastructure
             Bind<LuceneDataProvider>().ToConstant(provider);
             Bind<IPackageIndexer>().ToConstant(new PackageIndexer());
             Bind<IQueryable<LucenePackage>>().ToConstant(provider.AsQueryable(() => new LucenePackage(fileSystem)));
+
+            Bind<IPackageFileSystemWatcher>().ToConstant(new PackageFileSystemWatcher());
         }
 
         public static bool ShouldCreateIndex(LuceneDirectory dir)

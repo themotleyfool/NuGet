@@ -25,9 +25,12 @@ namespace NuGet.Server.Infrastructure.Lucene
         [Inject]
         public IPackageIndexer Indexer { get; set; }
 
+        [Inject]
+        public IPackageFileSystemWatcher FileSystemWatcher { get; set; }
+
         private volatile int maxDownloadCount;
         public int MaxDownloadCount { get { return maxDownloadCount; } }
-        
+
         public LucenePackageRepository(IPackagePathResolver packageResolver, IFileSystem fileSystem)
             : base(packageResolver, fileSystem)
         {
@@ -40,18 +43,10 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public override void AddPackage(IPackage package)
         {
-            var contents = package.GetStream().ReadAllBytesAndDispose();
-            var lucenePackage = Convert(package, new LucenePackage(FileSystem, path => new MemoryStream(contents)));
+            base.AddPackage(package);
 
-            base.AddPackage(lucenePackage);
-            Indexer.AddPackage(lucenePackage);
-        }
-
-        public override void RemovePackage(IPackage package)
-        {
-            Indexer.RemovePackage(package);
-            base.RemovePackage(package);
-            UpdateMaxDownloadCount();
+            // Tell the watcher to index the package now that it's done being written.
+            FileSystemWatcher.EndQuietTime(GetPackageFilePath(package));
         }
 
         public override void IncrementDownloadCount(IPackage package)
@@ -134,6 +129,29 @@ namespace NuGet.Server.Infrastructure.Lucene
             var derived = Mapper.Map<LucenePackage, DerivedPackageData>(lucenePackage);
 
             return new Package(package, derived) { Score = lucenePackage.Score };
+        }
+
+        public LucenePackage LoadFromIndex(string path)
+        {
+            var relativePath = MakeRelative(path);
+            var results = from p in LucenePackages where p.Path == relativePath select p;
+            return results.SingleOrDefault();
+        }
+
+        private string MakeRelative(string path)
+        {
+            var root = FileSystem.Root;
+            if (root.Last() != Path.DirectorySeparatorChar)
+            {
+                root += Path.DirectorySeparatorChar;
+            }
+
+            if (path.StartsWith(root, StringComparison.InvariantCultureIgnoreCase))
+            {
+                return path.Substring(root.Length);
+            }
+
+            throw new ArgumentException("The path " + path + " is not rooted in " + root);
         }
 
         public LucenePackage LoadFromFileSystem(string path)

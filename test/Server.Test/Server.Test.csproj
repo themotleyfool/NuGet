@@ -56,11 +56,13 @@
     <Compile Include="FeedPackageTest.cs" />
     <Compile Include="Lucene\IndexDifferenceCalculatorTests.cs" />
     <Compile Include="Lucene\LucenePackageRepositoryTests.cs" />
+    <Compile Include="Lucene\PackageFileSystemWatcherTests.cs" />
     <Compile Include="Lucene\PackageIndexerAddPackageTests.cs" />
     <Compile Include="Lucene\PackageDependencyConverterTests.cs" />
     <Compile Include="Lucene\PackageIndexerSynchronizeTests.cs" />
     <Compile Include="Lucene\PackageIndexerTestBase.cs" />
     <Compile Include="Lucene\TestBase.cs" />
+    <Compile Include="Lucene\TimerHelperTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="HelpersTest.cs" />
     <Compile Include="ServerPackageRepositoryTest.cs" />

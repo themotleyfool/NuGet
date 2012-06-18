@@ -58,29 +58,5 @@ namespace Server.Test.Lucene
 
             Assert.Equal(p.DownloadCount, repository.MaxDownloadCount);
         }
-
-        [Fact]
-        public void RemovePackage()
-        {
-            var doomed = MakeSamplePackage("deleteme", "1.0-alpha");
-            indexer.Setup(i => i.RemovePackage(doomed)).Verifiable();
-            
-            repository.RemovePackage(doomed);
-
-            indexer.Verify();
-        }
-
-        [Fact]
-        public void RemovePackage_UpdatesMaxDownload()
-        {
-            var doomed = MakeSamplePackage("deleteme", "1.0-alpha");
-            var p = MakeSamplePackage("a", "1.0");
-            p.DownloadCount = 1234;
-            repository.LucenePackages = new EnumerableQuery<LucenePackage>(new[] { p });
-
-            repository.RemovePackage(doomed);
-
-            Assert.Equal(p.DownloadCount, repository.MaxDownloadCount);
-        }
     }
 }
