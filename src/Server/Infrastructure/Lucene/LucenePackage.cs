@@ -138,7 +138,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         [Field(IndexMode.NotAnalyzed)]
         public string Path { get; set; }
 
-        [Field(IndexMode.NotAnalyzed, Converter = typeof(FrameworkNameConverter))]
+        [Field(Converter = typeof(FrameworkNameConverter))]
         public IEnumerable<FrameworkName> SupportedFrameworks { get; set; }
 
         [IgnoreField]

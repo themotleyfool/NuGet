@@ -21,6 +21,8 @@ namespace NuGet.Server.Infrastructure.Lucene
             
             base.AddAnalyzer("Authors", standardAnalyzer);
             base.AddAnalyzer("Owners", standardAnalyzer);
+
+            base.AddAnalyzer("Path", new KeywordAnalyzer());
         }
 
         class PorterStemAnalyzer : StandardAnalyzer
