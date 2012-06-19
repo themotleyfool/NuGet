@@ -32,7 +32,6 @@ namespace Server.Test.Lucene
             var missing = new[] {"A.nupkg", "B.nupkg"};
 
             session.Setup(s => s.Delete(new TermQuery(new Term("Path", "A.nupkg")), new TermQuery(new Term("Path", "B.nupkg"))));
-            session.Setup(s => s.Stage());
             session.Setup(s => s.Commit());
 
             indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(Empty, missing, Empty), session.Object);
@@ -48,10 +47,8 @@ namespace Server.Test.Lucene
             var pkg = MakeSamplePackage("A", "1.0");
             loader.Setup(l => l.LoadFromFileSystem(newPackages[0])).Returns(pkg);
 
-            session.Setup(s => s.Delete(new TermQuery(new Term("Path", pkg.Path))));
             session.Setup(s => s.Add(It.IsAny<LucenePackage>()));
 
-            session.Setup(s => s.Stage());
             session.Setup(s => s.Commit());
 
             indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(newPackages, Empty, Empty), session.Object);
@@ -69,10 +66,8 @@ namespace Server.Test.Lucene
             loader.Setup(l => l.LoadFromFileSystem(newPackages[0])).Throws(new Exception("invalid package"));
             loader.Setup(l => l.LoadFromFileSystem(newPackages[1])).Returns(pkg);
 
-            session.Setup(s => s.Delete(new TermQuery(new Term("Path", pkg.Path))));
             session.Setup(s => s.Add(It.IsAny<LucenePackage>()));
 
-            session.Setup(s => s.Stage());
             session.Setup(s => s.Commit());
 
             indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(newPackages, Empty, Empty), session.Object);

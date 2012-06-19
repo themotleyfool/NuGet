@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Lucene.Net.Index;
 using Lucene.Net.Linq;
@@ -60,7 +59,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         public IAsyncResult BeginSynchronizeIndexWithFileSystem(AsyncCallback callback, object clientState)
         {
             var task = new Task(state => SynchronizeIndexWithFileSystem(), clientState, TaskCreationOptions.LongRunning);
-            
+
             if (callback != null)
             {
                 task.ContinueWith(t => callback(t));
@@ -74,7 +73,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public void EndSynchronizeIndexWithFileSystem(IAsyncResult ar)
         {
-            var task = (Task) ar;
+            var task = (Task)ar;
             using (task)
             {
                 if (task.IsFaulted)
@@ -112,7 +111,6 @@ namespace NuGet.Server.Infrastructure.Lucene
             if (deleteQueries.Any())
             {
                 session.Delete(deleteQueries);
-                session.Stage();
             }
 
             var pathsToIndex = diff.NewPackages.Union(diff.ModifiedPackages).OrderBy(p => p).ToArray();
@@ -139,7 +137,6 @@ namespace NuGet.Server.Infrastructure.Lucene
             {
                 var package = PackageLoader.LoadFromFileSystem(path);
                 AddPackage(package, session);
-                session.Stage();
             }
             catch (Exception ex)
             {
@@ -174,11 +171,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             currentPackages.RemoveAll(p => p.Version == package.Version);
             currentPackages.Add(package);
 
-            // delete previous package from index, if present.
-            session.Delete(new TermQuery(new Term("Path", package.Path)));
             session.Add(package);
-
-            session.Stage();
 
             UpdatePackageVersionFlags(currentPackages.OrderByDescending(p => p.Version), session);
         }
@@ -193,13 +186,10 @@ namespace NuGet.Server.Infrastructure.Lucene
             {
                 using (var session = Provider.OpenSession<LucenePackage>())
                 {
-                    session.Delete(new TermQuery(new Term("Path", lucenePackage.Path)));
+                    session.Delete(lucenePackage);
 
-                    session.Commit();
-
-                    //TODO: verify this excludes just deleted package:
                     var remainingPackages = from p in LucenePackages
-                                            where p.Id == package.Id
+                                            where p.Id == package.Id && p.Version != package.Version
                                             orderby p.Version descending
                                             select p;
 
@@ -231,7 +221,6 @@ namespace NuGet.Server.Infrastructure.Lucene
                     p.IsAbsoluteLatestVersion = false;
                 }
 
-                session.Delete(new TermQuery(new Term("Path", p.Path)));
                 session.Add(p);
             }
         }
@@ -251,7 +240,6 @@ namespace NuGet.Server.Infrastructure.Lucene
                         {
                             p.VersionDownloadCount++;
                         }
-                        session.Delete(new TermQuery(new Term("Path", p.Path)));
                         session.Add(p);
                     }
 

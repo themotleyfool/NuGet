@@ -37,8 +37,10 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         #region IPackage
 
+        [Field(Key = true)]
         public string Id { get; set; }
 
+        [Field(Key = true)]
         public SemanticVersion Version { get; set; }
 
         public string Title { get; set; }
