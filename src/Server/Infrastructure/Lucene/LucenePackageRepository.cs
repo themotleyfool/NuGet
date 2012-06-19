@@ -96,10 +96,10 @@ namespace NuGet.Server.Infrastructure.Lucene
                 packages = from
                                 pkg in packages
                            where
-                                (pkg.Id == searchTerm || pkg.Title == searchTerm).Boost(3) ||
+                                ((pkg.Id == searchTerm || pkg.Title == searchTerm).Boost(3) ||
                                 (pkg.Tags == searchTerm).Boost(2) ||
                                 (pkg.Authors.Contains(searchTerm) || pkg.Owners.Contains(searchTerm)).Boost(2) ||
-                                (pkg.Summary == searchTerm || pkg.Description == searchTerm)
+                                (pkg.Summary == searchTerm || pkg.Description == searchTerm)).AllowSpecialCharacters()
                            select
                                pkg;
             }
