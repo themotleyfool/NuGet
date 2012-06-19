@@ -165,8 +165,20 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             var newest = currentPackages.FirstOrDefault();
 
-            package.VersionDownloadCount = 0;
-            package.DownloadCount = newest != null ? newest.DownloadCount : 0;
+            if (newest == null)
+            {
+                package.VersionDownloadCount = 0;
+                package.DownloadCount = 0;
+            }
+            else
+            {
+                package.DownloadCount = newest.DownloadCount;
+
+                if (newest.Version == package.Version)
+                {
+                    package.VersionDownloadCount = newest.VersionDownloadCount;
+                }
+            }
 
             currentPackages.RemoveAll(p => p.Version == package.Version);
             currentPackages.Add(package);

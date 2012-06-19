@@ -45,7 +45,7 @@ namespace Server.Test.Lucene
         }
 
         [Fact]
-        public void AddPackage_ReplaceZerosVersionDownloadCount()
+        public void AddPackage_ReplacePreservesVersionDownloadCount()
         {
             const int versionDownloadCount = 199;
             var package = MakeSamplePackage("Sample.Package", "1.0");
@@ -54,7 +54,7 @@ namespace Server.Test.Lucene
 
             indexer.AddPackage(package);
 
-            Assert.Equal(0, datasource.First().VersionDownloadCount);
+            Assert.Equal(versionDownloadCount, datasource.First().VersionDownloadCount);
         }
 
         [Fact]
