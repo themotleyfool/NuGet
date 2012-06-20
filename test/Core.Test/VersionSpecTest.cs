@@ -6,6 +6,60 @@ namespace NuGet.Test
     public class VersionSpecTest
     {
         [Fact]
+        public void Equal_Default()
+        {
+            var spec1 = new VersionSpec();
+            var spec2 = new VersionSpec();
+
+            Assert.True(Equals(spec1, spec2));
+        }
+
+        [Fact]
+        public void Equal_Not()
+        {
+            var spec1 = new VersionSpec { MinVersion = new SemanticVersion("1.0") };
+            var spec2 = new VersionSpec { MinVersion = new SemanticVersion("2.0") };
+
+            Assert.False(Equals(spec1, spec2));
+        }
+
+        [Fact]
+        public void Equal_Operator()
+        {
+            var spec1 = new VersionSpec();
+            var spec2 = new VersionSpec();
+
+            Assert.True(spec1 == spec2);
+        }
+
+        [Fact]
+        public void NotEqual_Operator()
+        {
+            var spec1 = new VersionSpec();
+            var spec2 = new VersionSpec { IsMaxInclusive = true };
+
+            Assert.True(spec1 != spec2);
+        }
+
+        [Fact]
+        public void Equal_VersionsSpecified()
+        {
+            var spec1 = new VersionSpec { MinVersion = new SemanticVersion("1.0"), MaxVersion = new SemanticVersion("2.0") };
+            var spec2 = new VersionSpec { MinVersion = new SemanticVersion("1.0"), MaxVersion = new SemanticVersion("2.0") };
+
+            Assert.True(Equals(spec1, spec2));
+        }
+
+        [Fact]
+        public void HashCode()
+        {
+            var spec1 = new VersionSpec { MinVersion = new SemanticVersion("1.0"), MaxVersion = new SemanticVersion("2.0") };
+            var spec2 = new VersionSpec { MinVersion = new SemanticVersion("1.0"), MaxVersion = new SemanticVersion("2.0") };
+
+            Assert.Equal(spec1.GetHashCode(), spec2.GetHashCode());
+        }
+
+        [Fact]
         public void ToStringExactVersion()
         {
             // Arrange

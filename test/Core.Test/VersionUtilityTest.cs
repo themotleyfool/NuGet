@@ -735,12 +735,40 @@ namespace NuGet.Test
         }
 
         [Fact]
+        public void GetUpgradeVersions()
+        {
+            // Act
+            IVersionSpec versionSpec1 = VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("1.3"), PackageUpdateMode.Newest);
+            IVersionSpec versionSpec2 = VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("0.9"), PackageUpdateMode.Newest);
+            IVersionSpec versionSpec3 = VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("2.9.45.6"), PackageUpdateMode.Newest);
+
+            // Assert
+            Assert.Equal("(1.3, ]", versionSpec1.ToString());
+            Assert.Equal("(0.9, ]", versionSpec2.ToString());
+            Assert.Equal("(2.9.45.6, ]", versionSpec3.ToString());
+        }
+
+        [Fact]
+        public void GetMinorUpgradeVersions()
+        {
+            // Act
+            IVersionSpec versionSpec1 = VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("1.3"), PackageUpdateMode.Minor);
+            IVersionSpec versionSpec2 = VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("0.9"), PackageUpdateMode.Minor);
+            IVersionSpec versionSpec3 = VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("2.9.45.6"), PackageUpdateMode.Minor);
+
+            // Assert
+            Assert.Equal("(1.3, 2.0)", versionSpec1.ToString());
+            Assert.Equal("(0.9, 1.0)", versionSpec2.ToString());
+            Assert.Equal("(2.9.45.6, 3.0)", versionSpec3.ToString());
+        }
+
+        [Fact]
         public void GetSafeVersions()
         {
             // Act
-            IVersionSpec versionSpec1 = VersionUtility.GetSafeRange(new SemanticVersion("1.3"));
-            IVersionSpec versionSpec2 = VersionUtility.GetSafeRange(new SemanticVersion("0.9"));
-            IVersionSpec versionSpec3 = VersionUtility.GetSafeRange(new SemanticVersion("2.9.45.6"));
+            IVersionSpec versionSpec1 = VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("1.3"), PackageUpdateMode.Safe);
+            IVersionSpec versionSpec2 = VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("0.9"), PackageUpdateMode.Safe);
+            IVersionSpec versionSpec3 = VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("2.9.45.6"), PackageUpdateMode.Safe);
 
             // Assert
             AssertSafeVersion(versionSpec1, new SemanticVersion("1.3"), new SemanticVersion("1.4"));
@@ -750,7 +778,7 @@ namespace NuGet.Test
 
         private void AssertSafeVersion(IVersionSpec versionSpec, SemanticVersion minVer, SemanticVersion maxVer)
         {
-            Assert.True(versionSpec.IsMinInclusive);
+            Assert.False(versionSpec.IsMinInclusive);
             Assert.False(versionSpec.IsMaxInclusive);
             Assert.Equal(versionSpec.MinVersion, minVer);
             Assert.Equal(versionSpec.MaxVersion, maxVer);

@@ -745,6 +745,9 @@ nuget update -Self</value>
   <data name="SourcesCommandCredentialsRequired" xml:space="preserve">
     <value>Both UserName and Password must be specified.</value>
   </data>
+  <data name="UpdateCommandMinorDescription" xml:space="preserve">
+    <value>Looks for updates with the highest version available within the same major version as the installed package.</value>
+  </data>
   <data name="InstallCommandPackageRestoreConsentNotFound" xml:space="preserve">
     <value>Package restore is disabled by default. To give consent, open the Visual Studio Options dialog, click on Package Manager node and check 'Allow NuGet to download missing packages during build.' You can also give consent by setting the environment variable 'EnableNuGetPackageRestore' to 'true'.</value>
   </data>

@@ -347,17 +347,32 @@ namespace NuGet
             return true;
         }
 
-        /// <summary>
-        /// The safe range is defined as the highest build and revision for a given major and minor version
-        /// </summary>
-        public static IVersionSpec GetSafeRange(SemanticVersion version)
+        public static IVersionSpec GetUpgradeVersionSpec(SemanticVersion version, PackageUpdateMode updateMode)
         {
-            return new VersionSpec
+            var spec = new VersionSpec
             {
-                IsMinInclusive = true,
+                IsMinInclusive = false,
+                IsMaxInclusive = false,
                 MinVersion = version,
-                MaxVersion = new SemanticVersion(new Version(version.Version.Major, version.Version.Minor + 1))
             };
+
+            switch (updateMode)
+            {
+                case PackageUpdateMode.Minor:
+                    spec.MaxVersion = new SemanticVersion(new Version(version.Version.Major + 1, 0));
+                    break;
+                case PackageUpdateMode.Safe:
+                    spec.MaxVersion = new SemanticVersion(new Version(version.Version.Major, version.Version.Minor + 1));
+                    break;
+                case PackageUpdateMode.Newest:
+                    spec.IsMaxInclusive = true;
+                    break;
+                default:
+                    // TODO: resx
+                    throw new ArgumentException("Unsupported PackageUpdateMode " + updateMode, "updateMode");
+            }
+
+            return spec;
         }
 
         public static string PrettyPrint(IVersionSpec versionSpec)
