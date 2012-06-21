@@ -43,6 +43,8 @@ namespace Server.Test.Lucene
                         {
                             Id = id,
                             Version = new SemanticVersion(version),
+                            DownloadCount = -1,
+                            VersionDownloadCount = -1
                         };
 
             p.Path = Path.Combine(packagePathResolver.Object.GetPackageDirectory(p),

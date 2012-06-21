@@ -173,6 +173,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             else
             {
                 package.DownloadCount = newest.DownloadCount;
+                package.VersionDownloadCount = 0;
 
                 if (newest.Version == package.Version)
                 {

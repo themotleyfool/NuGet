@@ -69,5 +69,16 @@ namespace Server.Test.Lucene
 
             Assert.Equal(downloadCount, datasource.First().DownloadCount);
         }
+
+        [Fact]
+        public void AddPackage_NewVersion_ZerosVersionDownloadCount()
+        {
+            indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
+            indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.1"));
+
+            var packages = datasource.OrderBy(p => p.Version).ToArray();
+            Assert.Equal(0, packages.Last().VersionDownloadCount);
+        }
+
     }
 }
