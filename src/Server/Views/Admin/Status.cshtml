@@ -1,0 +1,9 @@
+﻿@using NuGet.Server.Infrastructure.Lucene
+@model IndexingStatus
+
+<p>Indexer status: @Model.State</p>
+@if(Model.State == IndexingState.Building)
+{
+    <p>Indexing @Model.CompletedPackages of @Model.PackagesToIndex new packages.</p>
+    <p>Current package: @Model.CurrentPackagePath</p>
+}

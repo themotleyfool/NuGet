@@ -13,13 +13,19 @@ namespace NuGet
             {
                 return memoryStream.ToArray();
             }
-            else
+
+            using (memoryStream = new MemoryStream())
             {
-                using (memoryStream = new MemoryStream())
-                {
-                    stream.CopyTo(memoryStream);
-                    return memoryStream.ToArray();
-                }
+                stream.CopyTo(memoryStream);
+                return memoryStream.ToArray();
+            }
+        }
+
+        public static byte[] ReadAllBytesAndDispose(this Stream stream)
+        {
+            using (stream)
+            {
+                return stream.ReadAllBytes();
             }
         }
 

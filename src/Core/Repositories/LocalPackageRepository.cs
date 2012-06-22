@@ -101,7 +101,7 @@ namespace NuGet
             }
         }
 
-        public IPackage FindPackage(string packageId, SemanticVersion version)
+        public virtual IPackage FindPackage(string packageId, SemanticVersion version)
         {
             return FindPackage(OpenPackage, packageId, version);
         }

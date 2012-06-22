@@ -21,6 +21,7 @@ namespace NuGet.Server.DataServices
             Version = package.Version.ToString();
             Title = package.Title;
             Authors = String.Join(",", package.Authors);
+            Owners = String.Join(",", package.Owners);
             if (package.IconUrl != null)
             {
                 IconUrl = package.IconUrl.GetComponents(UriComponents.HttpRequestUrl, UriFormat.Unescaped);
@@ -43,9 +44,14 @@ namespace NuGet.Server.DataServices
             PackageHashAlgorithm = "SHA512";
             PackageSize = derivedData.PackageSize;
             LastUpdated = derivedData.LastUpdated.UtcDateTime;
-            Published = derivedData.Created.UtcDateTime;
+            Published = derivedData.Published.UtcDateTime;
+            Created = derivedData.Created.UtcDateTime;
             IsAbsoluteLatestVersion = package.IsAbsoluteLatestVersion;
             IsLatestVersion = package.IsLatestVersion;
+            IsPrerelease = derivedData.IsPrerelease;
+            Listed = package.Listed;
+            DownloadCount = package.DownloadCount;
+            VersionDownloadCount = package.VersionDownloadCount;
             Path = derivedData.Path;
             FullPath = derivedData.FullPath;
         }
@@ -81,6 +87,12 @@ namespace NuGet.Server.DataServices
         }
 
         public string Authors
+        {
+            get;
+            set;
+        }
+
+        public string Owners
         {
             get;
             set;
@@ -129,6 +141,12 @@ namespace NuGet.Server.DataServices
         }
 
         public string ReleaseNotes
+        {
+            get;
+            set;
+        }
+
+        public DateTime Created
         {
             get;
             set;
@@ -194,6 +212,12 @@ namespace NuGet.Server.DataServices
             set;
         }
 
+        public bool IsPrerelease
+        {
+            get;
+            set;
+        }
+
         public bool Listed
         {
             get;
@@ -201,6 +225,12 @@ namespace NuGet.Server.DataServices
         }
 
         public int VersionDownloadCount
+        {
+            get;
+            set;
+        }
+
+        public float Score
         {
             get;
             set;

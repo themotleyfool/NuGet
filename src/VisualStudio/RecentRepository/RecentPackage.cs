@@ -181,6 +181,14 @@ namespace NuGet.VisualStudio
             }
         }
 
+        public int VersionDownloadCount
+        {
+            get
+            {
+                return _basePackage.VersionDownloadCount;
+            }
+        }
+
         public string Copyright
         {
             get

@@ -1,0 +1,86 @@
+﻿@model NuGet.Server.ViewModels.SearchResultsViewModel
+@{
+    Layout = null;
+}
+<!DOCTYPE html>
+<html>
+<head>
+    <title>NuGet - Search Results</title>
+    <style>
+        ol
+        {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+        }
+        li
+        {
+            margin: 0;
+            padding: 0;
+        }
+        fieldset
+        {
+            min-height: 40px;
+            margin: 0;
+            padding: 0;
+            padding-left: 40px;
+            position: relative;
+            border-width: 1px 0 0 0;
+        }
+        img
+        {
+            position: absolute;
+            left: 0px;
+            width: 32px;
+            height: 32px;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        Search for &quot;@Model.Query&quot; returned @Model.TotalHits packages
+        
+        Showing results @Model.First to @Model.Last.
+
+        <ol>
+            @foreach (var package in Model.Hits)
+            {
+                <li>
+                    <fieldset>
+                        @if (package.IconUrl != null)
+                        {
+                            <img src="@package.IconUrl" alt="icon"/>
+                        }
+                        <p>@(package.Title ?? @package.Id)
+                            @package.Version</p>
+                        <p>
+                            By: @string.Join(", ", package.Authors)</p>
+                        @if (!string.IsNullOrEmpty(package.Tags))
+                        {
+                            @("Tags: ")
+                            foreach (var tag in package.Tags.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+                            {
+                                @Html.ActionLink(tag, "search", new { query = tag })
+                                @(" ")
+                            }
+
+                        }
+                        @package.DownloadCount downloads
+                        
+                    </fieldset>
+                </li>
+            }
+        </ol>
+        
+        @if (Model.Page > 0)
+        {
+            @Html.ActionLink("Previous", "Search", new { query = Model.Query, pageSize = Model.PageSize, page = Model.Page - 1 })
+        }
+        |
+        @if (!Model.IsLastPage)
+        {
+            @Html.ActionLink("Next", "Search", new { query = Model.Query, pageSize = Model.PageSize, page = Model.Page + 1 })
+        }
+    </div>
+</body>
+</html>

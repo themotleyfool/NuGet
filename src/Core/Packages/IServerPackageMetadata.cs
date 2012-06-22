@@ -6,5 +6,6 @@ namespace NuGet
     {
         Uri ReportAbuseUrl { get; }
         int DownloadCount { get; }
+        int VersionDownloadCount { get; }
     }
 }

@@ -15,7 +15,8 @@ App_Data
 *.docstates
 TestResults
 [Tt]humbs.db
-src/Server/Packages/*.nupkg
+src/Server/Lucene/
+src/Server/Packages/
 src/Server/Server.Publish.xml
 DebugConstants.cs
 *.log

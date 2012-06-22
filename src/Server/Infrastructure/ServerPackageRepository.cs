@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
+using ICSharpCode.SharpZipLib.Zip;
 using Ninject;
 using NuGet.Server.DataServices;
 
@@ -33,7 +34,7 @@ namespace NuGet.Server.Infrastructure
 
         public override void AddPackage(IPackage package)
         {
-            string fileName = PathResolver.GetPackageFileName(package);
+            string fileName = GetPackageFilePath(package);
             using (Stream stream = package.GetStream())
             {
                 FileSystem.AddFile(fileName, stream);
@@ -51,8 +52,13 @@ namespace NuGet.Server.Infrastructure
 
         public override void RemovePackage(IPackage package)
         {
-            string fileName = PathResolver.GetPackageFileName(package);
+            string fileName = GetPackageFilePath(package);
             FileSystem.DeleteFile(fileName);
+        }
+
+        public virtual void IncrementDownloadCount(IPackage package)
+        {
+            // not implemented.
         }
 
         protected override IPackage OpenPackage(string path)
@@ -62,12 +68,12 @@ namespace NuGet.Server.Infrastructure
             return package;
         }
 
-        public Package GetMetadataPackage(IPackage package)
+        public virtual Package GetMetadataPackage(IPackage package)
         {
             return new Package(package, _derivedDataLookup[package]);
         }
 
-        public IQueryable<IPackage> Search(string searchTerm, IEnumerable<string> targetFrameworks, bool allowPrereleaseVersions)
+        public virtual IQueryable<IPackage> Search(string searchTerm, IEnumerable<string> targetFrameworks, bool allowPrereleaseVersions)
         {
             var packages = GetPackages().Find(searchTerm)
                                         .FilterByPrerelease(allowPrereleaseVersions)
@@ -84,7 +90,7 @@ namespace NuGet.Server.Infrastructure
             return packages;
         }
 
-        public IEnumerable<IPackage> FindPackagesById(string packageId)
+        public virtual IEnumerable<IPackage> FindPackagesById(string packageId)
         {
             var localRepository = (LocalPackageRepository)this;
             return localRepository.FindPackagesById(packageId);
@@ -102,25 +108,45 @@ namespace NuGet.Server.Infrastructure
             return VersionUtility.IsCompatible(frameworkName, packageData.SupportedFrameworks);
         }
 
-        private DerivedPackageData CalculateDerivedData(IPackage package, string path)
+        protected virtual DerivedPackageData CalculateDerivedData(IPackage package, string path)
         {
-            byte[] fileBytes;
             using (Stream stream = FileSystem.OpenFile(path))
             {
-                fileBytes = stream.ReadAllBytes();
+                return CalculateDerivedData(package, path, stream);
             }
+        }
+
+        protected virtual DerivedPackageData CalculateDerivedData(IPackage package, string path, Stream stream)
+        {
+            byte[] fileBytes = stream.ReadAllBytesAndDispose();
 
             return new DerivedPackageData
             {
                 PackageSize = fileBytes.Length,
                 PackageHash = Convert.ToBase64String(HashProvider.CalculateHash(fileBytes)),
                 LastUpdated = FileSystem.GetLastModified(path),
-                Created = FileSystem.GetCreated(path),
+                Published = FileSystem.GetLastModified(path),
+                Created = GetZipArchiveCreateDate(new MemoryStream(fileBytes)),
+                IsPrerelease = !package.IsReleaseVersion(),
                 // TODO: Add support when we can make this faster
                 // SupportedFrameworks = package.GetSupportedFrameworks(),
                 Path = path,
                 FullPath = FileSystem.GetFullPath(path)
             };
+        }
+        
+        private DateTimeOffset GetZipArchiveCreateDate(Stream stream)
+        {
+            var f = new ZipFile(stream);
+            foreach (ZipEntry file in f)
+            {
+                if (file.Name.EndsWith(".nuspec"))
+                {
+                    return file.DateTime;
+                }
+            }
+
+            return DateTimeOffset.MinValue;
         }
     }
 }
