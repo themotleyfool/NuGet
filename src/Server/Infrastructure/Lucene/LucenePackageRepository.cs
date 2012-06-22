@@ -69,7 +69,8 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public override IQueryable<IPackage> GetPackages()
         {
-            return LucenePackages;
+            // cast is necessary due to https://www.re-motion.org/jira/browse/RM-4482
+            return LucenePackages.Select(p => (IPackage)p);
         }
 
         public override IPackage FindPackage(string packageId, SemanticVersion version)
