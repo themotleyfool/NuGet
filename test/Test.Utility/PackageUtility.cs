@@ -186,12 +186,14 @@ namespace NuGet.Test
             mockPackage.Setup(m => m.Tags).Returns(tags);
             mockPackage.Setup(m => m.Title).Returns(String.Empty);
             mockPackage.Setup(m => m.DownloadCount).Returns(downloadCount);
+            mockPackage.Setup(m => m.VersionDownloadCount).Returns(downloadCount);
             mockPackage.Setup(m => m.RequireLicenseAcceptance).Returns(false);
             mockPackage.Setup(m => m.Listed).Returns(listed);
             mockPackage.Setup(m => m.Language).Returns(language);
             mockPackage.Setup(m => m.IconUrl).Returns((Uri)null);
             mockPackage.Setup(m => m.ProjectUrl).Returns((Uri)null);
             mockPackage.Setup(m => m.ReleaseNotes).Returns("");
+            mockPackage.Setup(m => m.Owners).Returns(Enumerable.Empty<string>());
             if (!listed)
             {
                 mockPackage.Setup(m => m.Published).Returns(Constants.Unpublished);

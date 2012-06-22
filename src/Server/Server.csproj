@@ -98,11 +98,11 @@
     <Compile Include="Infrastructure\Lucene\IPackageIndexer.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\BoolToIntConverter.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\DateTimeOffsetToTicksConverter.cs" />
+    <Compile Include="Infrastructure\Lucene\Mapping\PackageDependencySetConverter.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\FrameworkNameConverter.cs" />
     <Compile Include="Infrastructure\Lucene\LucenePackage.cs" />
     <Compile Include="Infrastructure\Lucene\LucenePackageRepository.cs" />
     <Compile Include="Infrastructure\Lucene\PackageAnalyzer.cs" />
-    <Compile Include="Infrastructure\Lucene\Mapping\PackageDependencyConverter.cs" />
     <Compile Include="Infrastructure\Lucene\PackageFileSystemWatcher.cs" />
     <Compile Include="Infrastructure\Lucene\PackageIndexer.cs" />
     <Compile Include="Infrastructure\Lucene\TimerHelper.cs" />

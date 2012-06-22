@@ -57,12 +57,12 @@
     <Compile Include="Controllers\SearchControllerTests.cs" />
     <Compile Include="DefaultUrlRedirectTest.cs" />
     <Compile Include="FeedPackageTest.cs" />
+    <Compile Include="Lucene\Mapping\PackageDependencySetConverterTests.cs" />
     <Compile Include="PackageSvcFacts.cs" />
     <Compile Include="Lucene\IndexDifferenceCalculatorTests.cs" />
     <Compile Include="Lucene\LucenePackageRepositoryTests.cs" />
     <Compile Include="Lucene\PackageFileSystemWatcherTests.cs" />
     <Compile Include="Lucene\PackageIndexerAddPackageTests.cs" />
-    <Compile Include="Lucene\PackageDependencyConverterTests.cs" />
     <Compile Include="Lucene\PackageIndexerSynchronizeTests.cs" />
     <Compile Include="Lucene\PackageIndexerTestBase.cs" />
     <Compile Include="Lucene\TestBase.cs" />

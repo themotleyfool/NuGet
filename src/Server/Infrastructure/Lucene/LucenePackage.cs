@@ -29,7 +29,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             Owners = Enumerable.Empty<string>();
             AssemblyReferences = Enumerable.Empty<IPackageAssemblyReference>();
             FrameworkAssemblies = Enumerable.Empty<FrameworkAssemblyReference>();
-            Dependencies = Enumerable.Empty<PackageDependency>();
+            Dependencies = Enumerable.Empty<string>();
         }
 
         [QueryScore]
@@ -102,8 +102,15 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public IEnumerable<string> Owners { get; set; }
 
-        [Field(IndexMode.NotIndexed, Converter = typeof(PackageDependencyConverter))]
-        public IEnumerable<PackageDependency> Dependencies { get; set; }
+        [Field(IndexMode.NotIndexed)]
+        public IEnumerable<string> Dependencies { get; set; }
+
+        [IgnoreField]
+        public IEnumerable<PackageDependencySet> DependencySets
+        {
+            get { return PackageDependencySetConverter.Parse(Dependencies); }
+            set { Dependencies = value.SelectMany(PackageDependencySetConverter.Flatten); }
+        }
 
         [IgnoreField]
         public IEnumerable<FrameworkAssemblyReference> FrameworkAssemblies { get; set; }
