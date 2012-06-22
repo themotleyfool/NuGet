@@ -16,14 +16,22 @@ namespace NuGet.Server.DataServices
     [System.ServiceModel.ServiceBehavior(IncludeExceptionDetailInFaults = true)]
     public class Packages : DataService<PackageContext>, IDataServiceStreamProvider, IServiceProvider
     {
+        private readonly Lazy<IServerPackageRepository> repositoryLoader;
+ 
         private IServerPackageRepository Repository
         {
-            get
-            {
-                // It's bad to use the container directly but we aren't in the loop when this 
-                // class is created
-                return NinjectBootstrapper.Kernel.Get<IServerPackageRepository>();
-            }
+            get { return repositoryLoader.Value; }
+        }
+
+        public Packages()
+            : this(new Lazy<IServerPackageRepository>(() => NinjectBootstrapper.Kernel.Get<IServerPackageRepository>()))
+        {
+            
+        }
+
+        public Packages(Lazy<IServerPackageRepository> repositoryLoader)
+        {
+            this.repositoryLoader = repositoryLoader;
         }
 
         // This method is called only once to initialize service-wide policies.
