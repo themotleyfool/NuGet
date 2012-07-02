@@ -41,5 +41,41 @@ namespace NuGet
 
             return versionBuilder.ToString();
         }
+
+        public bool Equals(VersionSpec other)
+        {
+            if (ReferenceEquals(null, other)) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return Equals(other.MinVersion, MinVersion) && other.IsMinInclusive.Equals(IsMinInclusive) && Equals(other.MaxVersion, MaxVersion) && other.IsMaxInclusive.Equals(IsMaxInclusive);
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (ReferenceEquals(null, obj)) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != typeof (VersionSpec)) return false;
+            return Equals((VersionSpec) obj);
+        }
+
+        public override int GetHashCode()
+        {
+            var combiner = new HashCodeCombiner();
+            combiner.AddObject(MinVersion);
+            combiner.AddObject(IsMinInclusive);
+            combiner.AddObject(MaxVersion);
+            combiner.AddObject(IsMaxInclusive);
+
+            return combiner.CombinedHash;
+        }
+
+        public static bool operator ==(VersionSpec left, VersionSpec right)
+        {
+            return Equals(left, right);
+        }
+
+        public static bool operator !=(VersionSpec left, VersionSpec right)
+        {
+            return !Equals(left, right);
+        }
     }
 }
