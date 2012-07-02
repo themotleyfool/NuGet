@@ -139,6 +139,90 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             Assert.Null(version);
         }
 
+        [Fact]
+        public void UpdatePackages_EmptyRepository()
+        {
+            // Arrange
+            Mock<IProjectManager> projectManager;
+            MockPackageRepository localRepository;
+            var updateCmd = ArrangeForUpdatePackages(out projectManager, out localRepository);
+
+            // Act
+            updateCmd.UpdatePackages(localRepository, projectManager.Object);
+
+            // Assert
+            projectManager.Verify();
+        }
+
+        [Fact]
+        public void UpdatePackages()
+        {
+            // Arrange
+            Mock<IProjectManager> projectManager;
+            MockPackageRepository localRepository;
+            var updateCmd = ArrangeForUpdatePackages(out projectManager, out localRepository);
+            localRepository.AddPackage(PackageUtility.CreatePackage("Sample"));
+            projectManager.Setup(pm => pm.UpdatePackageReference("Sample", VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("1.0"), PackageUpdateMode.Newest), true, false));
+
+            // Act
+            updateCmd.UpdatePackages(localRepository, projectManager.Object);
+
+            // Assert
+            projectManager.Verify();
+        }
+
+        [Fact]
+        public void UpdatePackages_Minor()
+        {
+            // Arrange
+            Mock<IProjectManager> projectManager;
+            MockPackageRepository localRepository;
+            var updateCmd = ArrangeForUpdatePackages(out projectManager, out localRepository);
+            localRepository.AddPackage(PackageUtility.CreatePackage("Sample"));
+            projectManager.Setup(pm => pm.UpdatePackageReference("Sample", VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("1.0"), PackageUpdateMode.Minor), true, false));
+
+            updateCmd.Minor = true;
+
+            // Act
+            updateCmd.UpdatePackages(localRepository, projectManager.Object);
+
+            // Assert
+            projectManager.Verify();
+        }
+
+        [Fact]
+        public void UpdatePackages_Safe()
+        {
+            // Arrange
+            Mock<IProjectManager> projectManager;
+            MockPackageRepository localRepository;
+            var updateCmd = ArrangeForUpdatePackages(out projectManager, out localRepository);
+            localRepository.AddPackage(PackageUtility.CreatePackage("Sample"));
+            projectManager.Setup(pm => pm.UpdatePackageReference("Sample", VersionUtility.GetUpgradeVersionSpec(new SemanticVersion("1.0"), PackageUpdateMode.Safe), true, false));
+
+            updateCmd.Safe = true;
+
+            // Act
+            updateCmd.UpdatePackages(localRepository, projectManager.Object);
+
+            // Assert
+            projectManager.Verify();
+        }
+
+        private UpdateCommand ArrangeForUpdatePackages(out Mock<IProjectManager> projectManager, out MockPackageRepository localRepository)
+        {
+            var factory = new Mock<IPackageRepositoryFactory>();
+            var sourceProvider = new Mock<IPackageSourceProvider>();
+            localRepository = new MockPackageRepository();
+            factory.Setup(m => m.CreateRepository(It.IsAny<string>())).Returns(localRepository);
+
+            projectManager = new Mock<IProjectManager>(MockBehavior.Strict);
+
+            ConsoleInfo consoleInfo = GetConsoleInfo();
+            var updateCmd = new UpdateCommand(factory.Object, sourceProvider.Object);
+            updateCmd.Console = consoleInfo.Console;
+            return updateCmd;
+        }
 
         private ConsoleInfo GetConsoleInfo()
         {

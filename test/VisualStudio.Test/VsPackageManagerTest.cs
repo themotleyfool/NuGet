@@ -332,7 +332,7 @@ namespace NuGet.VisualStudio.Test
             var projectManager = new ProjectManager(localRepository.Object, pathResolver, new MockProjectSystem(), projectRepository);
 
             // Act
-            packageManager.UpdatePackage(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
+            packageManager.UpdatePackageToSpecificVersion(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
 
             // Assert
             Assert.False(packageManager.LocalRepository.Exists(A10));
@@ -359,7 +359,7 @@ namespace NuGet.VisualStudio.Test
             var projectManager = new ProjectManager(localRepository.Object, pathResolver, new MockProjectSystem(), projectRepository);
 
             // Act
-            packageManager.UpdatePackage(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
+            packageManager.UpdatePackageToSpecificVersion(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
 
             // Assert
             Assert.True(packageManager.LocalRepository.Exists(A10));
@@ -402,7 +402,7 @@ namespace NuGet.VisualStudio.Test
             var projectManager = new ProjectManager(localRepository.Object, pathResolver, new MockProjectSystem(), projectRepository);
 
             // Act
-            packageManager.UpdatePackage(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
+            packageManager.UpdatePackageToSpecificVersion(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
 
             // Assert
             Assert.False(packageManager.LocalRepository.Exists(A10));
@@ -439,7 +439,7 @@ namespace NuGet.VisualStudio.Test
             projectManager.AddPackageReference("A", new SemanticVersion("1.0"));
 
             // Act
-            packageManager.UpdatePackage(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
+            packageManager.UpdatePackageToSpecificVersion(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
 
             // Assert
             Assert.False(packageManager.LocalRepository.Exists(A10));
@@ -476,7 +476,7 @@ namespace NuGet.VisualStudio.Test
             projectManager.AddPackageReference("A", new SemanticVersion("1.0"));
 
             // Act
-            packageManager.UpdatePackage(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
+            packageManager.UpdatePackageToSpecificVersion(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
 
             // Assert
             Assert.False(packageManager.LocalRepository.Exists(A10));
@@ -521,7 +521,7 @@ namespace NuGet.VisualStudio.Test
             projectManager.AddPackageReference("A", new SemanticVersion("1.0"));
 
             // Act
-            packageManager.UpdatePackage(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
+            packageManager.UpdatePackageToSpecificVersion(projectManager, "A", version: null, updateDependencies: true, allowPrereleaseVersions: false, logger: NullLogger.Instance);
 
             // Assert
             Assert.False(packageManager.LocalRepository.Exists(A10));
@@ -717,7 +717,7 @@ namespace NuGet.VisualStudio.Test
             logger.Setup(l => l.Log(MessageLevel.Warning, "'orphan' was not installed in any project. Update failed.")).Verifiable();
 
             // Act
-            packageManager.UpdatePackages(updateDependencies: true, allowPrereleaseVersions: true, logger: logger.Object, eventListener: new Mock<IPackageOperationEventListener>().Object);
+            packageManager.UpdatePackages(updateDependencies: true, allowPrereleaseVersions: true, logger: logger.Object, eventListener: new Mock<IPackageOperationEventListener>().Object, updateMode: PackageUpdateMode.Newest);
 
             // Assert
             logger.Verify();
