@@ -12,8 +12,8 @@
     
     protected override void OnApplicationStarted()
     {
-       base.OnApplicationStarted();
-       MapRoutes(RouteTable.Routes);
+        base.OnApplicationStarted();
+        MapRoutes(RouteTable.Routes);
     }
 
     protected override IKernel CreateKernel()

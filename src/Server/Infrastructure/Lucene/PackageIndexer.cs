@@ -25,9 +25,6 @@ namespace NuGet.Server.Infrastructure.Lucene
         public LuceneDataProvider Provider { get; set; }
 
         [Inject]
-        public IQueryable<LucenePackage> LucenePackages { get; set; }
-
-        [Inject]
         public ILucenePackageLoader PackageLoader { get; set; }
 
         public void Initialize()
@@ -89,10 +86,10 @@ namespace NuGet.Server.Infrastructure.Lucene
             {
                 indexingStatus = new IndexingStatus { State = IndexingState.Scanning };
 
-                var session = Provider.OpenSession<LucenePackage>();
+                var session = OpenSession();
                 try
                 {
-                    SynchronizeIndexWithFileSystem(IndexDifferenceCalculator.FindDifferences(FileSystem, LucenePackages), session);
+                    SynchronizeIndexWithFileSystem(IndexDifferenceCalculator.FindDifferences(FileSystem, session.Query()), session);
                 }
                 finally
                 {
@@ -148,17 +145,16 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             lock (writeLock)
             {
-                using (var session = Provider.OpenSession<LucenePackage>())
+                using (var session = OpenSession())
                 {
                     AddPackage(package, session);
-                    session.Commit();
                 }
             }
         }
 
         private void AddPackage(LucenePackage package, ISession<LucenePackage> session)
         {
-            var currentPackages = (from p in LucenePackages
+            var currentPackages = (from p in session.Query()
                                    where p.Id == package.Id
                                    orderby p.Version descending
                                    select p).ToList();
@@ -186,7 +182,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             session.Add(package);
 
-            UpdatePackageVersionFlags(currentPackages.OrderByDescending(p => p.Version), session);
+            UpdatePackageVersionFlags(currentPackages.OrderByDescending(p => p.Version));
         }
 
         public void RemovePackage(IPackage package)
@@ -197,44 +193,32 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             lock (writeLock)
             {
-                using (var session = Provider.OpenSession<LucenePackage>())
+                using (var session = OpenSession())
                 {
-                    session.Delete(lucenePackage);
-
-                    var remainingPackages = from p in LucenePackages
+                    var remainingPackages = from p in session.Query()
                                             where p.Id == package.Id && p.Version != package.Version
                                             orderby p.Version descending
                                             select p;
 
-                    UpdatePackageVersionFlags(remainingPackages, session);
+                    session.Delete(lucenePackage);
 
-                    session.Commit();
+                    UpdatePackageVersionFlags(remainingPackages);
                 }
             }
         }
 
-        private void UpdatePackageVersionFlags(IEnumerable<LucenePackage> packages, ISession<LucenePackage> session)
+        private void UpdatePackageVersionFlags(IEnumerable<LucenePackage> packages)
         {
             var first = true;
             foreach (var p in packages)
             {
+                p.IsLatestVersion = first;
+                p.IsAbsoluteLatestVersion = first;
+
                 if (first)
                 {
                     first = false;
-                    p.IsLatestVersion = true;
-                    p.IsAbsoluteLatestVersion = true;
                 }
-                else
-                {
-                    if (!p.IsLatestVersion && !p.IsAbsoluteLatestVersion)
-                    {
-                        continue;
-                    }
-                    p.IsLatestVersion = false;
-                    p.IsAbsoluteLatestVersion = false;
-                }
-
-                session.Add(p);
             }
         }
 
@@ -242,10 +226,10 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             lock (writeLock)
             {
-                var packages = from p in LucenePackages where p.Id == package.Id select p;
-
-                using (var session = Provider.OpenSession<LucenePackage>())
+                using (var session = OpenSession())
                 {
+                    var packages = from p in session.Query() where p.Id == package.Id select p;
+
                     foreach (var p in packages)
                     {
                         p.DownloadCount++;
@@ -253,12 +237,14 @@ namespace NuGet.Server.Infrastructure.Lucene
                         {
                             p.VersionDownloadCount++;
                         }
-                        session.Add(p);
                     }
-
-                    session.Commit();
                 }
             }
+        }
+
+        private ISession<LucenePackage> OpenSession()
+        {
+            return Provider.OpenSession(() => new LucenePackage(FileSystem));
         }
     }
 }

@@ -15,7 +15,8 @@ namespace Server.Test.Lucene
 
         public PackageIndexerSynchronizeTests()
         {
-            session = new Mock<ISession<LucenePackage>>(MockBehavior.Strict);
+            session = new Mock<ISession<LucenePackage>>();
+            session.Setup(s => s.Query()).Returns(datasource);
         }
 
         [Fact]
@@ -23,7 +24,7 @@ namespace Server.Test.Lucene
         {
             indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(Empty, Empty, Empty), session.Object);
 
-            session.VerifyAll();
+            session.Verify();
         }
 
         [Fact]
@@ -31,12 +32,11 @@ namespace Server.Test.Lucene
         {
             var missing = new[] {"A.nupkg", "B.nupkg"};
 
-            session.Setup(s => s.Delete(new TermQuery(new Term("Path", "A.nupkg")), new TermQuery(new Term("Path", "B.nupkg"))));
-            session.Setup(s => s.Commit());
+            session.Setup(s => s.Delete(new TermQuery(new Term("Path", "A.nupkg")), new TermQuery(new Term("Path", "B.nupkg")))).Verifiable();
 
             indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(Empty, missing, Empty), session.Object);
 
-            session.VerifyAll();
+            session.Verify();
         }
 
         [Fact]
@@ -47,9 +47,9 @@ namespace Server.Test.Lucene
             var pkg = MakeSamplePackage("A", "1.0");
             loader.Setup(l => l.LoadFromFileSystem(newPackages[0])).Returns(pkg);
 
-            session.Setup(s => s.Add(It.IsAny<LucenePackage>()));
+            session.Setup(s => s.Add(It.IsAny<LucenePackage>())).Verifiable();
 
-            session.Setup(s => s.Commit());
+            session.Setup(s => s.Commit()).Verifiable();
 
             indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(newPackages, Empty, Empty), session.Object);
 
@@ -66,9 +66,9 @@ namespace Server.Test.Lucene
             loader.Setup(l => l.LoadFromFileSystem(newPackages[0])).Throws(new Exception("invalid package"));
             loader.Setup(l => l.LoadFromFileSystem(newPackages[1])).Returns(pkg);
 
-            session.Setup(s => s.Add(It.IsAny<LucenePackage>()));
+            session.Setup(s => s.Add(It.IsAny<LucenePackage>())).Verifiable();
 
-            session.Setup(s => s.Commit());
+            session.Setup(s => s.Commit()).Verifiable();
 
             indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(newPackages, Empty, Empty), session.Object);
 

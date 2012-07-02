@@ -65,10 +65,9 @@ namespace Server.Test.Lucene
             p.Path = Path.Combine(packagePathResolver.Object.GetPackageDirectory(p),
                                   packagePathResolver.Object.GetPackageFileName(p));
 
-            using (var s = provider.OpenSession<LucenePackage>())
+            using (var s = provider.OpenSession<LucenePackage>(() => new LucenePackage(fileSystem.Object)))
             {
                 s.Add(p);
-                s.Commit();
             }
         }
     }

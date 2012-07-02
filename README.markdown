@@ -11,19 +11,6 @@ This fork adds the following features not currently in origin/master:
 * Keeps track of DownloadCount and VersionDownloadCount
 * Keeps track of IsLatestVersion flag
 
-Incompatible Changes
-=====
-
-Whereas before packages could be published simply by copying them
-into <code>~/Packages/</code>, this fork requires packages to be
-published via e.g. <code>nuget push MyPackage.1.0.nupkg -s http://localhost/ my-api-key</code>
-or they will not be added to the Lucene index, and therefore they
-will not show up in the feed.
-
-Conversely, when removing packages from the feed, this must also be
-performed by executing e.g. <code>nuget delete MyPackage 1.0 -Source http://localhost/ -ApiKey my-api-key</code>
-in order for them to be removed from the Lucene index.
-
 Upcoming Features
 ====
 

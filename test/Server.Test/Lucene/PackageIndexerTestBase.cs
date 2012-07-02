@@ -12,7 +12,6 @@ namespace Server.Test.Lucene
                           {
                               FileSystem = fileSystem.Object,
                               Provider = provider,
-                              LucenePackages = datasource,
                               Writer = indexWriter,
                               PackageLoader = loader.Object
                           };
