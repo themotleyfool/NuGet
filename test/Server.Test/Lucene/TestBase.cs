@@ -13,7 +13,7 @@ namespace Server.Test.Lucene
 {
     public abstract class TestBase
     {
-        protected readonly Mock<ILucenePackageLoader> loader;
+        protected readonly Mock<ILucenePackageRepository> loader;
         protected readonly Mock<IPackagePathResolver> packagePathResolver;
         protected readonly Mock<IFileSystem> fileSystem;
         protected readonly LuceneDataProvider provider;
@@ -23,7 +23,7 @@ namespace Server.Test.Lucene
         protected TestBase()
         {
             packagePathResolver = new Mock<IPackagePathResolver>();
-            loader = new Mock<ILucenePackageLoader>();
+            loader = new Mock<ILucenePackageRepository>();
             fileSystem = new Mock<IFileSystem>();
             
             packagePathResolver.Setup(p => p.GetPackageDirectory(It.IsAny<IPackage>())).Returns("package-dir");

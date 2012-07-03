@@ -25,7 +25,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         public LuceneDataProvider Provider { get; set; }
 
         [Inject]
-        public ILucenePackageLoader PackageLoader { get; set; }
+        public ILucenePackageRepository PackageRepository { get; set; }
 
         public void Initialize()
         {
@@ -132,7 +132,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             try
             {
-                var package = PackageLoader.LoadFromFileSystem(path);
+                var package = PackageRepository.LoadFromFileSystem(path);
                 AddPackage(package, session);
             }
             catch (Exception ex)

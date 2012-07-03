@@ -20,7 +20,7 @@ namespace Server.Test.Lucene
                           {
                               FileSystem = fileSystem.Object,
                               Indexer = indexer.Object,
-                              PackageLoader = loader.Object,
+                              PackageRepository = loader.Object,
                               LogError = ex => { throw ex; },
                               QuietTime = TimeSpan.Zero
                           };

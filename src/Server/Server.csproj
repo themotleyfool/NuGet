@@ -90,7 +90,7 @@
     <Compile Include="DataServices\DefaultUrlRedirect.cs" />
     <Compile Include="DataServices\Package.cs" />
     <Compile Include="DataServices\PackageContext.cs" />
-    <Compile Include="Infrastructure\Lucene\ILucenePackageLoader.cs" />
+    <Compile Include="Infrastructure\Lucene\ILucenePackageRepository.cs" />
     <Compile Include="Infrastructure\Lucene\IndexDifferenceCalculator.cs" />
     <Compile Include="Infrastructure\Lucene\IndexDifferences.cs" />
     <Compile Include="Infrastructure\Lucene\IndexingStatus.cs" />

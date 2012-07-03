@@ -1,6 +1,8 @@
+using System.Linq;
+
 namespace NuGet.Server.Infrastructure.Lucene
 {
-    public interface ILucenePackageLoader
+    public interface ILucenePackageRepository : IServerPackageRepository
     {
         /// <summary>
         /// Loads pacakge data from the Lucene index with a given path.
@@ -20,5 +22,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         /// data.
         /// </summary>
         LucenePackage Convert(IPackage package);
+
+        IQueryable<LucenePackage> LucenePackages { get; }
     }
 }

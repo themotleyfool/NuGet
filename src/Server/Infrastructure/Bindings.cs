@@ -23,7 +23,7 @@ namespace NuGet.Server.Infrastructure
             Bind<IFileSystem>().ToConstant(fileSystem);
             Bind<IPackagePathResolver>().ToConstant(packagePathResolver);
             Bind<IServerPackageRepository>().ToConstant(packageRepository);
-            Bind<ILucenePackageLoader>().ToConstant(packageRepository);
+            Bind<ILucenePackageRepository>().ToConstant(packageRepository);
             Bind<PackageService>().ToSelf();
             Bind<IPackageAuthenticationService>().To<PackageAuthenticationService>();
 

@@ -24,7 +24,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         public IFileSystem FileSystem { get; set; }
 
         [Inject]
-        public ILucenePackageLoader PackageLoader { get; set; }
+        public ILucenePackageRepository PackageRepository { get; set; }
 
         [Inject]
         public IPackageIndexer Indexer { get; set; }
@@ -120,7 +120,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             try
             {
-                var package = PackageLoader.LoadFromFileSystem(fullPath);
+                var package = PackageRepository.LoadFromFileSystem(fullPath);
                 Indexer.AddPackage(package);
             }
             catch (Exception ex)
@@ -133,7 +133,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             try
             {
-                var package = PackageLoader.LoadFromIndex(fullPath);
+                var package = PackageRepository.LoadFromIndex(fullPath);
                 if (package == null)
                 {
                     return;

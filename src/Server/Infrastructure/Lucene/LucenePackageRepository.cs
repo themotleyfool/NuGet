@@ -10,7 +10,7 @@ using LuceneDirectory = Lucene.Net.Store.Directory;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
-    public class LucenePackageRepository : ServerPackageRepository, ILucenePackageLoader, IInitializable
+    public class LucenePackageRepository : ServerPackageRepository, ILucenePackageRepository, IInitializable
     {
         static LucenePackageRepository()
         {

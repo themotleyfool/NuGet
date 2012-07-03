@@ -13,7 +13,7 @@ namespace Server.Test.Lucene
                               FileSystem = fileSystem.Object,
                               Provider = provider,
                               Writer = indexWriter,
-                              PackageLoader = loader.Object
+                              PackageRepository = loader.Object
                           };
         }
     }
