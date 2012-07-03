@@ -58,6 +58,7 @@
   <ItemGroup>
     <Compile Include="BindingTests.cs" />
     <Compile Include="Controllers\SearchControllerTests.cs" />
+    <Compile Include="Controllers\TabCompletionControllerTests.cs" />
     <Compile Include="DefaultUrlRedirectTest.cs" />
     <Compile Include="FeedPackageTest.cs" />
     <Compile Include="Lucene\Mapping\PackageDependencySetConverterTests.cs" />

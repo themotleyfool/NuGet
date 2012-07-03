@@ -63,6 +63,14 @@
                            new { httpMethod = new HttpMethodConstraint("GET") },
                            context => CreatePackageService().DownloadPackage(context.HttpContext));
 
+        // Tab completion endpoints
+        routes.MapRoute("TabCompletion-Packages", "api/v2/package-ids",
+           new { controller = "TabCompletion", action = "GetMatchingPackages", maxResults = 30 });
+
+        routes.MapRoute("TabCompletion-Versions", "api/v2/package-versions/{packageId}",
+           new { controller = "TabCompletion", action = "GetPackageVersions" });
+        
+        // Search web UI
         routes.MapRoute("Search", "search/{action}",
            new { controller = "Search", action = "Search" });
 
