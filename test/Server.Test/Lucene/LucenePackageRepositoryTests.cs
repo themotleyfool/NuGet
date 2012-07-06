@@ -17,7 +17,8 @@ namespace Server.Test.Lucene
             repository = new LucenePackageRepository(packagePathResolver.Object, fileSystem.Object)
                              {
                                  Indexer = indexer.Object,
-                                 LucenePackages = new EnumerableQuery<LucenePackage>(new LucenePackage[0])
+                                 LucenePackages = new EnumerableQuery<LucenePackage>(new LucenePackage[0]),
+                                 LuceneDataProvider = provider
                              };
         }
 
@@ -30,21 +31,6 @@ namespace Server.Test.Lucene
             repository.IncrementDownloadCount(pkg);
 
             indexer.Verify();
-        }
-
-        [Fact]
-        public void IncrementDownloadCount_UpdatesMaxDownload()
-        {
-            var pkg = new DataServicePackage();
-            var p1 = MakeSamplePackage("a", "1.0");
-            var p2 = MakeSamplePackage("a", "1.0");
-            var p3 = MakeSamplePackage("a", "1.0");
-            p2.DownloadCount = 91982;
-            repository.LucenePackages = new EnumerableQuery<LucenePackage>(new[] {p1, p2, p3});
-
-            repository.IncrementDownloadCount(pkg);
-
-            Assert.Equal(p2.DownloadCount, repository.MaxDownloadCount);
         }
 
         [Fact]

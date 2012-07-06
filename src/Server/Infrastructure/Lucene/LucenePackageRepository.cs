@@ -20,6 +20,9 @@ namespace NuGet.Server.Infrastructure.Lucene
         }
 
         [Inject]
+        public LuceneDataProvider LuceneDataProvider { get; set; }
+
+        [Inject]
         public IQueryable<LucenePackage> LucenePackages { get; set; }
 
         [Inject]
@@ -38,7 +41,9 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public void Initialize()
         {
-            UpdateMaxDownloadCount();
+            LuceneDataProvider.RegisterCacheWarmingCallback(UpdateMaxDownloadCount, () => new LucenePackage(FileSystem));
+
+            UpdateMaxDownloadCount(LucenePackages);
         }
 
         public override void AddPackage(IPackage package)
@@ -52,12 +57,11 @@ namespace NuGet.Server.Infrastructure.Lucene
         public override void IncrementDownloadCount(IPackage package)
         {
             Indexer.IncrementDownloadCount(package);
-            UpdateMaxDownloadCount();
         }
 
-        public void UpdateMaxDownloadCount()
+        private void UpdateMaxDownloadCount(IQueryable<LucenePackage> packages)
         {
-            if (LucenePackages.Any())
+            if (packages.Any())
             {
                 maxDownloadCount = LucenePackages.Max(p => p.DownloadCount);
             }
