@@ -25,9 +25,9 @@ namespace Server.Test.Lucene
             packagePathResolver = new Mock<IPackagePathResolver>();
             loader = new Mock<ILucenePackageRepository>();
             fileSystem = new Mock<IFileSystem>();
-            
+
             packagePathResolver.Setup(p => p.GetPackageDirectory(It.IsAny<IPackage>())).Returns("package-dir");
-            packagePathResolver.Setup(p => p.GetPackageFileName(It.IsAny<IPackage>())).Returns((Func<IPackage, string>) (pkg => pkg.Id));
+            packagePathResolver.Setup(p => p.GetPackageFileName(It.IsAny<IPackage>())).Returns((Func<IPackage, string>)(pkg => pkg.Id));
 
             var dir = new RAMDirectory();
             var analyzer = new PackageAnalyzer();
@@ -42,13 +42,16 @@ namespace Server.Test.Lucene
             var p = new LucenePackage(fileSystem.Object, path => new MemoryStream())
                         {
                             Id = id,
-                            Version = new SemanticVersion(version),
+                            Version = version != null ? new SemanticVersion(version) : null,
                             DownloadCount = -1,
                             VersionDownloadCount = -1
                         };
 
-            p.Path = Path.Combine(packagePathResolver.Object.GetPackageDirectory(p),
-                                  packagePathResolver.Object.GetPackageFileName(p));
+            if (p.Id != null && version != null)
+            {
+                p.Path = Path.Combine(packagePathResolver.Object.GetPackageDirectory(p),
+                                      packagePathResolver.Object.GetPackageFileName(p));
+            }
 
             return p;
         }
@@ -56,6 +59,9 @@ namespace Server.Test.Lucene
         protected void InsertPackage(string id, string version)
         {
             var p = MakeSamplePackage(id, version);
+
+            p.DownloadCount = 0;
+            p.VersionDownloadCount = 0;
 
             InsertPackage(p);
         }
@@ -65,7 +71,7 @@ namespace Server.Test.Lucene
             p.Path = Path.Combine(packagePathResolver.Object.GetPackageDirectory(p),
                                   packagePathResolver.Object.GetPackageFileName(p));
 
-            using (var s = provider.OpenSession<LucenePackage>(() => new LucenePackage(fileSystem.Object)))
+            using (var s = provider.OpenSession(() => new LucenePackage(fileSystem.Object)))
             {
                 s.Add(p);
             }

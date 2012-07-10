@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using Lucene.Net.Index;
 using Lucene.Net.Linq;
@@ -9,11 +10,14 @@ using Ninject;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
-    public class PackageIndexer : IPackageIndexer, IInitializable
+    public class PackageIndexer : IPackageIndexer, IInitializable, IDisposable
     {
         private readonly object writeLock = new object();
 
+        private volatile bool disposed;
         private volatile IndexingStatus indexingStatus = new IndexingStatus { State = IndexingState.Idle };
+        private readonly IList<IPackage> pendingDownloadIncrements = new List<IPackage>();
+        private Thread downloadCounterThread;
 
         [Inject]
         public IFileSystem FileSystem { get; set; }
@@ -43,6 +47,21 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             // Sync lucene index with filesystem whenever the web app starts.
             BeginSynchronizeIndexWithFileSystem(cb, this);
+
+            downloadCounterThread = new Thread(DownloadIncrementLoop) { Name = "Lucene Package Download Count Updater", IsBackground = true };
+            downloadCounterThread.Start();
+        }
+
+        public void Dispose()
+        {
+            disposed = true;
+            if (downloadCounterThread == null) return;
+            lock (pendingDownloadIncrements)
+            {
+                Monitor.Pulse(pendingDownloadIncrements);    
+            }
+            downloadCounterThread.Join();
+            downloadCounterThread = null;
         }
 
         /// <summary>
@@ -65,7 +84,6 @@ namespace NuGet.Server.Infrastructure.Lucene
             task.Start();
 
             return task;
-
         }
 
         public void EndSynchronizeIndexWithFileSystem(IAsyncResult ar)
@@ -75,7 +93,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             {
                 if (task.IsFaulted)
                 {
-                    throw task.Exception;
+                    throw (Exception) task.Exception ?? new InvalidOperationException("Task faulted but Exception was null.");
                 }
             }
         }
@@ -99,6 +117,58 @@ namespace NuGet.Server.Infrastructure.Lucene
             }
         }
 
+        public void AddPackage(LucenePackage package)
+        {
+            lock (writeLock)
+            {
+                using (var session = OpenSession())
+                {
+                    AddPackage(package, session);
+                }
+            }
+        }
+
+        public void RemovePackage(IPackage package)
+        {
+            if (!(package is LucenePackage)) throw new ArgumentException("Package of type " + package.GetType() + " not supported.");
+
+            var lucenePackage = (LucenePackage)package;
+
+            lock (writeLock)
+            {
+                using (var session = OpenSession())
+                {
+                    var remainingPackages = from p in session.Query()
+                                            where p.Id == package.Id && p.Version != package.Version
+                                            orderby p.Version descending
+                                            select p;
+
+                    session.Delete(lucenePackage);
+
+                    UpdatePackageVersionFlags(remainingPackages);
+                }
+            }
+        }
+
+        public void IncrementDownloadCount(IPackage package)
+        {
+            if (string.IsNullOrWhiteSpace(package.Id))
+            {
+                throw new InvalidOperationException("Package Id must be specified.");
+            }
+
+            if (package.Version == null)
+            {
+                throw new InvalidOperationException("Package Version must be specified.");
+            }
+
+            lock (pendingDownloadIncrements)
+            {
+                pendingDownloadIncrements.Add(package);
+                Monitor.Pulse(pendingDownloadIncrements);
+            }
+        }
+        
         public void SynchronizeIndexWithFileSystem(IndexDifferences diff, ISession<LucenePackage> session)
         {
             if (diff.IsEmpty) return;
@@ -141,17 +211,6 @@ namespace NuGet.Server.Infrastructure.Lucene
             }
         }
 
-        public void AddPackage(LucenePackage package)
-        {
-            lock (writeLock)
-            {
-                using (var session = OpenSession())
-                {
-                    AddPackage(package, session);
-                }
-            }
-        }
-
         private void AddPackage(LucenePackage package, ISession<LucenePackage> session)
         {
             var currentPackages = (from p in session.Query()
@@ -185,28 +244,6 @@ namespace NuGet.Server.Infrastructure.Lucene
             UpdatePackageVersionFlags(currentPackages.OrderByDescending(p => p.Version));
         }
 
-        public void RemovePackage(IPackage package)
-        {
-            if (!(package is LucenePackage)) throw new ArgumentException("Package of type " + package.GetType() + " not supported.");
-
-            var lucenePackage = (LucenePackage)package;
-
-            lock (writeLock)
-            {
-                using (var session = OpenSession())
-                {
-                    var remainingPackages = from p in session.Query()
-                                            where p.Id == package.Id && p.Version != package.Version
-                                            orderby p.Version descending
-                                            select p;
-
-                    session.Delete(lucenePackage);
-
-                    UpdatePackageVersionFlags(remainingPackages);
-                }
-            }
-        }
-
         private void UpdatePackageVersionFlags(IEnumerable<LucenePackage> packages)
         {
             var first = true;
@@ -222,20 +259,50 @@ namespace NuGet.Server.Infrastructure.Lucene
             }
         }
 
-        public void IncrementDownloadCount(IPackage package)
+        private void DownloadIncrementLoop()
         {
+            while (!disposed)
+            {
+                IList<IPackage> copy;
+
+                lock (pendingDownloadIncrements)
+                {
+                    copy = PendingDownloadIncrements;
+                    pendingDownloadIncrements.Clear();
+
+                    if (copy.IsEmpty())
+                    {
+                        Monitor.Wait(pendingDownloadIncrements, TimeSpan.FromMinutes(1));
+                        continue;
+                    }
+                }
+
+                ApplyPendingDownloadIncrements(copy);
+            }
+        }
+
+        public IList<IPackage> PendingDownloadIncrements
+        {
+            get { return new List<IPackage>(pendingDownloadIncrements); }
+        }
+
+        public void ApplyPendingDownloadIncrements(IList<IPackage> increments)
+        {
+            var byId = increments.ToLookup(p => p.Id);
+
             lock (writeLock)
             {
                 using (var session = OpenSession())
                 {
-                    var packages = from p in session.Query() where p.Id == package.Id select p;
-
-                    foreach (var p in packages)
+                    foreach (var grouping in byId)
                     {
-                        p.DownloadCount++;
-                        if (p.Version == package.Version)
+                        var packages = from p in session.Query() where p.Id == grouping.Key select p;
+                        var byVersion = grouping.ToLookup(p => p.Version);
+
+                        foreach (var lucenePackage in packages)
                         {
-                            p.VersionDownloadCount++;
+                            lucenePackage.DownloadCount += grouping.Count();
+                            lucenePackage.VersionDownloadCount += byVersion[lucenePackage.Version].Count();
                         }
                     }
                 }
