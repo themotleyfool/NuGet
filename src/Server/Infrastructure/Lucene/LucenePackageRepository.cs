@@ -63,7 +63,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             if (packages.Any())
             {
-                maxDownloadCount = LucenePackages.Max(p => p.DownloadCount);
+                maxDownloadCount = packages.Max(p => p.DownloadCount);
             }
             else
             {
