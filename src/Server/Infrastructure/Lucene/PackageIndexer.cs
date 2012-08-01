@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,6 +31,13 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         [Inject]
         public ILucenePackageRepository PackageRepository { get; set; }
+
+        public TimeSpan CommitInterval { get; set; }
+
+        public PackageIndexer()
+        {
+            CommitInterval = TimeSpan.FromMinutes(1);
+        }
 
         public void Initialize()
         {
@@ -182,14 +190,24 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             var pathsToIndex = diff.NewPackages.Union(diff.ModifiedPackages).OrderBy(p => p).ToArray();
 
+            var elapsedTimer = Stopwatch.StartNew();
+
             for (var i = 0; i < pathsToIndex.Length; i++)
             {
                 var path = pathsToIndex[i];
                 indexingStatus = new IndexingStatus { State = IndexingState.Building, CompletedPackages = i, PackagesToIndex = pathsToIndex.Length, CurrentPackagePath = path };
 
                 SynchronizePackage(session, path);
+
+                if (elapsedTimer.Elapsed > CommitInterval)
+                {
+                    indexingStatus = new IndexingStatus { State = IndexingState.Commit, CompletedPackages = i, PackagesToIndex = pathsToIndex.Length };
+                    session.Commit();
+                    elapsedTimer.Restart();
+                }
             }
 
+            indexingStatus = new IndexingStatus { State = IndexingState.Commit };
             session.Commit();
 
             indexingStatus = new IndexingStatus { State = IndexingState.Optimizing };

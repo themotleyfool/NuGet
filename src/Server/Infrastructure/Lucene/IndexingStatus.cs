@@ -5,6 +5,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         Idle,
         Scanning,
         Building,
+        Commit,
         Optimizing
     }
 

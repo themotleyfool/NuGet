@@ -2,8 +2,11 @@
 @model IndexingStatus
 
 <p>Indexer status: @Model.State</p>
-@if(Model.State == IndexingState.Building)
+@if(Model.PackagesToIndex > 0)
 {
     <p>Indexing @Model.CompletedPackages of @Model.PackagesToIndex new packages.</p>
-    <p>Current package: @Model.CurrentPackagePath</p>
+    if(Model.CurrentPackagePath != null)
+    {
+      <p>Current package: @Model.CurrentPackagePath</p>   
+    }
 }

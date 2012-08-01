@@ -16,7 +16,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public Action<Exception> LogError = Log.Error;
 
-        private TimerHelper timerHelper;
+        private readonly TimerHelper timerHelper;
         private FileSystemWatcher fileWatcher;
         private FileSystemWatcher dirWatcher;
 
