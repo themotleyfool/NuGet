@@ -22,6 +22,8 @@ namespace NuGet.Server.Infrastructure.Lucene
             base.AddAnalyzer("Authors", standardAnalyzer);
             base.AddAnalyzer("Owners", standardAnalyzer);
 
+            base.AddAnalyzer("Dependencies", new DependencyAnalyzer());
+
             base.AddAnalyzer("Path", new KeywordAnalyzer());
         }
 
@@ -42,6 +44,15 @@ namespace NuGet.Server.Infrastructure.Lucene
             public override TokenStream TokenStream(string fieldName, TextReader reader)
             {
                 return new LowerCaseFilter(base.TokenStream(fieldName, reader));
+            }
+        }
+
+        class DependencyAnalyzer : LowercaseKeywordAnalyzer
+        {
+            public override TokenStream TokenStream(string fieldName, TextReader reader)
+            {
+            	var name = reader.ReadToEnd().Split(':')[0];
+            	return base.TokenStream(fieldName, new StringReader(name));
             }
         }
     }

@@ -102,7 +102,6 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public IEnumerable<string> Owners { get; set; }
 
-        [Field(IndexMode.NotIndexed)]
         public IEnumerable<string> Dependencies { get; set; }
 
         [IgnoreField]
