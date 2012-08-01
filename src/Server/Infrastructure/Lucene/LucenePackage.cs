@@ -40,7 +40,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         [Field(Key = true)]
         public string Id { get; set; }
 
-        [Field(Key = true)]
+        [Field(Key = true, Converter = typeof(CachingSemanticVersionConverter))]
         public SemanticVersion Version { get; set; }
 
         public string Title { get; set; }

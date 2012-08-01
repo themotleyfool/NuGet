@@ -96,6 +96,7 @@
     <Compile Include="Infrastructure\Lucene\IndexingStatus.cs" />
     <Compile Include="Infrastructure\Lucene\IPackageIndexer.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\BoolToIntConverter.cs" />
+    <Compile Include="Infrastructure\Lucene\Mapping\CachingSemanticVersionConverter.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\DateTimeOffsetToTicksConverter.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\PackageDependencySetConverter.cs" />
     <Compile Include="Infrastructure\Lucene\Mapping\FrameworkNameConverter.cs" />
