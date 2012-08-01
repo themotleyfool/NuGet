@@ -47,17 +47,22 @@
                            context => CreatePackageService().CreatePackage(context.HttpContext));
 
         // Route to delete packages
-        routes.MapDelegate("DeletePackage-Root",
-                                       "{packageId}/{version}",
-                                       new { httpMethod = new HttpMethodConstraint("DELETE") },
-                                       context => CreatePackageService().DeletePackage(context.HttpContext));
-
         routes.MapDelegate("DeletePackage",
+                           "api/v2/{packageId}/{version}",
+                           new { httpMethod = new HttpMethodConstraint("DELETE") },
+                           context => CreatePackageService().DeletePackage(context.HttpContext));
+
+        routes.MapDelegate("DeletePackage-Alternate",
                            "api/v2/package/{packageId}/{version}",
                            new { httpMethod = new HttpMethodConstraint("DELETE") },
                            context => CreatePackageService().DeletePackage(context.HttpContext));
 
         // Route to get packages
+        routes.MapDelegate("DownloadLatestPackage",
+                           "api/v2/package/{packageId}",
+                           new { httpMethod = new HttpMethodConstraint("GET") },
+                           context => CreatePackageService().DownloadPackage(context.HttpContext));
+        
         routes.MapDelegate("DownloadPackage",
                            "api/v2/package/{packageId}/{version}",
                            new { httpMethod = new HttpMethodConstraint("GET") },

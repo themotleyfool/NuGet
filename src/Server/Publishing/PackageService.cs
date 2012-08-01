@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Web;
 using System.Web.Routing;
@@ -23,7 +24,6 @@ namespace NuGet.Server
 
         public void CreatePackage(HttpContextBase context)
         {
-            RouteData routeData = GetRouteData(context);
             var request = context.Request;
 
             // Get the api key from the header
@@ -67,7 +67,7 @@ namespace NuGet.Server
             else
             {
                 // Package not found
-                WritePackageNotFound(context, packageId, version);
+                WritePackageNotFound(context, packageId, version.ToString());
             }
         }
 
@@ -76,14 +76,23 @@ namespace NuGet.Server
             RouteData routeData = GetRouteData(context);
             // Get the package file name from the route
             string packageId = routeData.GetRequiredString("packageId");
-            var version = new SemanticVersion(routeData.GetRequiredString("version"));
+            var packageVersion = routeData.Values["version"] as string;
 
-            IPackage requestedPackage = _serverRepository.FindPackage(packageId, version);
+            IPackage requestedPackage;
+
+            if (string.IsNullOrWhiteSpace(packageVersion))
+            {
+                requestedPackage = _serverRepository.FindPackagesById(packageId).OrderByDescending(p => p.Version).FirstOrDefault();
+            }
+            else
+            {
+                requestedPackage = _serverRepository.FindPackage(packageId, new SemanticVersion(packageVersion));
+            }
 
             if (requestedPackage != null)
             {
                 Package packageMetatada = _serverRepository.GetMetadataPackage(requestedPackage);
-                context.Response.AddHeader("content-disposition", String.Format("attachment; filename={0}", packageMetatada.Path));
+                context.Response.AddHeader("content-disposition", String.Format("attachment; filename={0}", Path.GetFileName(packageMetatada.Path)));
                 context.Response.ContentType = "application/zip";
                 context.Response.TransmitFile(packageMetatada.FullPath);
 
@@ -92,11 +101,11 @@ namespace NuGet.Server
             else
             {
                 // Package not found
-                WritePackageNotFound(context, packageId, version);
+                WritePackageNotFound(context, packageId, packageVersion);
             }
         }
 
-        private static void WritePackageNotFound(HttpContextBase context, string packageId, SemanticVersion version)
+        private static void WritePackageNotFound(HttpContextBase context, string packageId, string version)
         {
             WriteStatus(context, HttpStatusCode.NotFound, String.Format("'Package {0} {1}' Not found.", packageId, version));
         }
