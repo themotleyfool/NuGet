@@ -1,12 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Ninject;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
     public interface IPackageFileSystemWatcher
     {
+        /// <summary>
+        /// Tell watcher that a package contents have been completely written to disk
+        /// and it is safe to index the package. If the package is already being indexed
+        /// on another thread, this method will block until the operation completes.
+        /// </summary>
         void EndQuietTime(string path);
     }
 
@@ -19,6 +26,7 @@ namespace NuGet.Server.Infrastructure.Lucene
         private readonly TimerHelper timerHelper;
         private FileSystemWatcher fileWatcher;
         private FileSystemWatcher dirWatcher;
+        private readonly IDictionary<string, WaitHandle> indexMonitors = new Dictionary<string, WaitHandle>();
 
         [Inject]
         public IFileSystem FileSystem { get; set; }
@@ -97,12 +105,38 @@ namespace NuGet.Server.Infrastructure.Lucene
             {
                 AddToIndex(fullPath);
             }
+            else
+            {
+                WaitHandle signal;
+
+                lock(indexMonitors)
+                {
+                    if (!indexMonitors.TryGetValue(fullPath, out signal)) return;
+                }
+
+                signal.WaitOne();
+            }
         }
 
         private void AddToIndexAfterQuietTime(object state)
         {
             var e = (FileSystemEventArgs)state;
-            AddToIndex(e.FullPath);
+            var fullPath = e.FullPath;
+            var signal = new ManualResetEvent(false);
+
+            lock(indexMonitors)
+            {
+                indexMonitors.Add(fullPath, signal);
+            }
+
+            AddToIndex(fullPath);
+
+            lock(indexMonitors)
+            {
+                indexMonitors.Remove(fullPath);
+            }
+
+            signal.Set();
         }
 
         public void OnPackageRenamed(object sender, RenamedEventArgs e)
