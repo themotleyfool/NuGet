@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using Common.Logging;
 using Ninject;
 
 namespace NuGet.Server.Infrastructure.Lucene
@@ -21,12 +22,12 @@ namespace NuGet.Server.Infrastructure.Lucene
     {
         public const string FullReindexTimerKey = "**PackageFileSystemWatcher.Reindex**";
 
-        public Action<Exception> LogError = Log.Error;
+        public static ILog Log = LogManager.GetLogger<PackageFileSystemWatcher>();
 
         private readonly TimerHelper timerHelper;
         private FileSystemWatcher fileWatcher;
         private FileSystemWatcher dirWatcher;
-        private readonly IDictionary<string, WaitHandle> indexMonitors = new Dictionary<string, WaitHandle>();
+        private readonly IDictionary<string, EventWaitHandle> indexMonitors = new Dictionary<string, EventWaitHandle>();
 
         [Inject]
         public IFileSystem FileSystem { get; set; }
@@ -101,32 +102,48 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             var fullPath = Path.Combine(FileSystem.Root, path);
 
-            if (timerHelper.CancelTimer(fullPath))
+            if (!timerHelper.CancelTimer(fullPath))
             {
-                AddToIndex(fullPath);
-            }
-            else
-            {
-                WaitHandle signal;
+                EventWaitHandle signal;
 
                 lock(indexMonitors)
                 {
-                    if (!indexMonitors.TryGetValue(fullPath, out signal)) return;
+                    if (!indexMonitors.TryGetValue(fullPath, out signal))
+                    {
+                        Log.Trace(m => m("No monitors found for path {0}; perhaps no FileSystemWatcher events fired yet.", fullPath));
+                    }
                 }
 
-                signal.WaitOne();
+                if (signal != null)
+                {
+                    Log.Trace(m => m("Waiting for asynchronous indexing to complete: " + fullPath));
+                    signal.WaitOne();
+                    return;
+                }
             }
+
+            Log.Trace(m => m("Indexing package synchronously: " + fullPath));
+            AddToIndex(fullPath);
+
+            // Cancel any events that came in while we were indexing.
+            timerHelper.CancelTimer(fullPath);
         }
 
         private void AddToIndexAfterQuietTime(object state)
         {
             var e = (FileSystemEventArgs)state;
             var fullPath = e.FullPath;
-            var signal = new ManualResetEvent(false);
+            EventWaitHandle signal;
+
+            Log.Info(m => m("Quiet time elapsed after file activity on path {0}; Adding package to index.", fullPath));
 
             lock(indexMonitors)
             {
-                indexMonitors.Add(fullPath, signal);
+                if (!indexMonitors.TryGetValue(fullPath, out signal))
+                {
+                    signal = new ManualResetEvent(false);
+                    indexMonitors.Add(fullPath, signal);
+                }
             }
 
             AddToIndex(fullPath);
@@ -141,12 +158,15 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public void OnPackageRenamed(object sender, RenamedEventArgs e)
         {
+            Log.Info(m => m("Package path {0} renamed to {1}.", e.OldFullPath, e.FullPath));
             RemoveFromIndex(e.OldFullPath);
             AddToIndex(e.FullPath);
         }
 
         public void OnPackageDeleted(object sender, FileSystemEventArgs e)
         {
+            Log.Info(m => m("Package path {0} deleted.", e.FullPath));
+
             RemoveFromIndex(e.FullPath);
         }
 
@@ -159,7 +179,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             }
             catch (Exception ex)
             {
-                LogError(ex);
+                Log.Error(ex);
             }
         }
 
@@ -176,7 +196,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             }
             catch (Exception ex)
             {
-                LogError(ex);
+                Log.Error(ex);
             }
 
         }

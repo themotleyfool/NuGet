@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using AutoMapper;
+using Common.Logging;
 using Lucene.Net.Linq;
 using Ninject;
 using NuGet.Server.DataServices;
@@ -12,6 +13,8 @@ namespace NuGet.Server.Infrastructure.Lucene
 {
     public class LucenePackageRepository : ServerPackageRepository, ILucenePackageRepository, IInitializable
     {
+        private static readonly ILog Log = LogManager.GetLogger<LucenePackageRepository>();
+
         static LucenePackageRepository()
         {
             Mapper.CreateMap<IPackage, LucenePackage>();
@@ -48,10 +51,16 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public override void AddPackage(IPackage package)
         {
+            Log.Info(m => m("Adding package {0} {1} to file system", package.Id, package.Version));
+
             base.AddPackage(package);
+
+            Log.Info(m => m("Indexing package {0} {1}", package.Id, package.Version));
 
             // Tell the watcher to index the package now that it's done being written.
             FileSystemWatcher.EndQuietTime(GetPackageFilePath(package));
+
+            Log.Info(m => m("Package {0} {1} indexing complete.", package.Id, package.Version));
         }
 
         public override void IncrementDownloadCount(IPackage package)
@@ -69,6 +78,8 @@ namespace NuGet.Server.Infrastructure.Lucene
             {
                 maxDownloadCount = 0;
             }
+
+            Log.Info(m => m("Max download count: " + maxDownloadCount));
         }
 
         public override IQueryable<IPackage> GetPackages()

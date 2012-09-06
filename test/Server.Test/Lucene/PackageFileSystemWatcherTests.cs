@@ -1,7 +1,7 @@
 using System;
 using System.IO;
+using Common.Logging;
 using Moq;
-using NuGet;
 using NuGet.Server.Infrastructure.Lucene;
 using Xunit;
 
@@ -11,6 +11,7 @@ namespace Server.Test.Lucene
     {
         private readonly PackageFileSystemWatcher watcher;
         private readonly Mock<IPackageIndexer> indexer;
+        private Mock<ILog> log;
 
         public PackageFileSystemWatcherTests()
         {
@@ -21,9 +22,11 @@ namespace Server.Test.Lucene
                               FileSystem = fileSystem.Object,
                               Indexer = indexer.Object,
                               PackageRepository = loader.Object,
-                              LogError = ex => { throw ex; },
                               QuietTime = TimeSpan.Zero
                           };
+
+            log = new Mock<ILog>();
+            PackageFileSystemWatcher.Log = log.Object;
         }
 
         [Fact]
@@ -41,13 +44,12 @@ namespace Server.Test.Lucene
         public void PackageModified_HandlesException()
         {
             var exception = new Exception("mock error");
-            Exception loggedException = null;
-            watcher.LogError = ex => loggedException = ex;
+
             loader.Setup(ld => ld.LoadFromFileSystem(@".\Sample.1.0.nupkg")).Throws(exception);
+            log.Setup(l => l.Error(exception));
 
             watcher.OnPackageModified(this, new FileSystemEventArgs(WatcherChangeTypes.Changed, ".", "Sample.1.0.nupkg"));
 
-            Assert.Same(exception, loggedException);
             loader.Verify();
             indexer.Verify();
         }
@@ -67,15 +69,14 @@ namespace Server.Test.Lucene
         public void PackageDeleted_HandlesException()
         {
             var exception = new Exception("mock error");
-            Exception loggedException = null;
-            watcher.LogError = ex => loggedException = ex;
             var lucenePackage = new LucenePackage(fileSystem.Object);
+
             loader.Setup(ld => ld.LoadFromIndex(@".\Sample.1.0.nupkg")).Returns(lucenePackage);
             indexer.Setup(idx => idx.RemovePackage(lucenePackage)).Throws(exception);
+            log.Setup(l => l.Error(exception));
 
             watcher.OnPackageDeleted(this, new FileSystemEventArgs(WatcherChangeTypes.Changed, ".", "Sample.1.0.nupkg"));
 
-            Assert.Same(exception, loggedException);
             loader.Verify();
             indexer.Verify();
         }
