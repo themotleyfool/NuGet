@@ -6,7 +6,7 @@
             <ViewSelectedBy>
                 <TypeName>NuGet.ZipPackage</TypeName>
                 <TypeName>NuGet.DataServicePackage</TypeName>
-                <TypeName>NuGet.VisualStudio.RecentPackage</TypeName>
+                <TypeName>NuGet.UnzippedPackage</TypeName>
             </ViewSelectedBy>
 
             <TableControl>
@@ -54,7 +54,7 @@
             <Name>NuGet.IPackage.List</Name>
             <ViewSelectedBy>
                 <TypeName>NuGet.ZipPackage</TypeName>
-                <TypeName>NuGet.VisualStudio.RecentPackage</TypeName>
+                <TypeName>NuGet.UnzippedPackage</TypeName>
             </ViewSelectedBy>
 
             <ListControl>

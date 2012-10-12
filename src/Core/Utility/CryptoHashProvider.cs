@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
@@ -59,6 +60,14 @@ namespace NuGet
             }
         }
 
+        public byte[] CalculateHash(Stream stream)
+        {
+            using (var hashAlgorithm = GetHashAlgorithm())
+            {
+                return hashAlgorithm.ComputeHash(stream);
+            }
+        }
+
         public byte[] CalculateHash(byte[] data)
         {
             using (var hashAlgorithm = GetHashAlgorithm())
@@ -73,6 +82,7 @@ namespace NuGet
             return Enumerable.SequenceEqual(dataHash, hash);
         }
 
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Reliability", "CA2000:Dispose objects before losing scope", Justification="We want to return the object.")]
         private HashAlgorithm GetHashAlgorithm()
         {
             if (_hashAlgorithm.Equals(SHA256HashAlgorithm, StringComparison.OrdinalIgnoreCase))

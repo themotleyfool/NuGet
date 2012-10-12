@@ -194,10 +194,13 @@ namespace NuGet.Test
             mockPackage.Setup(m => m.ProjectUrl).Returns((Uri)null);
             mockPackage.Setup(m => m.ReleaseNotes).Returns("");
             mockPackage.Setup(m => m.Owners).Returns(Enumerable.Empty<string>());
+            mockPackage.Setup(m => m.Copyright).Returns("");
             if (!listed)
             {
                 mockPackage.Setup(m => m.Published).Returns(Constants.Unpublished);
             }
+            var targetFramework = allFiles.Select(f => f.TargetFramework).Where(f => f != null);
+            mockPackage.Setup(m => m.GetSupportedFrameworks()).Returns(targetFramework);
             
             return mockPackage.Object;
         }
@@ -214,7 +217,17 @@ namespace NuGet.Test
 
 
                 string effectivePath;
-                FrameworkName fn = ParseFrameworkName(fileName, out effectivePath);
+                FrameworkName fn;
+                try
+                {
+                    fn = ParseFrameworkName(fileName, out effectivePath);
+                }
+                catch (ArgumentException)
+                {
+                    effectivePath = fileName;
+                    fn = VersionUtility.UnsupportedFrameworkName;
+                }
+
                 if (fn != null)
                 {
                     mockAssemblyReference.Setup(m => m.EffectivePath).Returns(effectivePath);

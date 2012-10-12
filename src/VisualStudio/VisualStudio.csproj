@@ -67,8 +67,6 @@
     <Compile Include="ProjectSystems\IVsProjectSystem.cs" />
     <Compile Include="ProjectSystems\JsProjectSystem.cs" />
     <Compile Include="ProjectSystems\WixProjectSystem.cs" />
-    <Compile Include="RecentRepository\IPersistencePackageMetadata.cs" />
-    <Compile Include="RecentRepository\RecentPackage.cs" />
     <Compile Include="RegistryKeyWrapper.cs" />
     <Compile Include="SkipAssemblyReferencesPackage.cs" />
     <Compile Include="SolutionFolderFileSystem.cs" />
@@ -116,8 +114,9 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="Microsoft.VisualStudio.ExtensionManager, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
-    <Reference Include="Microsoft.VisualStudio.ExtensionsExplorer, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
+    <Reference Include="$(ExtensionManagerAssembly)" />
+    <Reference Include="$(ExtensionsExplorerAssembly)" />
+    <Reference Include="$(ExtensionsExplorerUIAssembly)" />
     <Reference Include="EnvDTE, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
       <EmbedInteropTypes>True</EmbedInteropTypes>
     </Reference>
@@ -126,17 +125,35 @@
     </Reference>
     <Reference Include="Microsoft.Build" />
     <Reference Include="Microsoft.CSharp" />
-    <Reference Include="Microsoft.VisualStudio.ComponentModelHost, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL" />
-    <Reference Include="Microsoft.VisualStudio.ExtensionsExplorer.UI, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-    </Reference>
+    <Reference Include="$(ComponentHostAssembly)" />
     <Reference Include="Microsoft.VisualStudio.OLE.Interop, Version=7.1.40304.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
-    <Reference Include="Microsoft.VisualStudio.Settings, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=x86" />
-    <Reference Include="Microsoft.VisualStudio.Shell.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+    <Reference Include="$(VisualStudioShellAssembly)">
       <EmbedInteropTypes>False</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Project.V11Only, Version=11.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <Private>False</Private>
+      <HintPath>..\..\lib\Microsoft.VisualStudio.Project.V11Only.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Settings, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=x86">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\lib\VS10\Microsoft.VisualStudio.Settings.dll</HintPath>
+      <Private>False</Private>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Shell.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\lib\VS10\Microsoft.VisualStudio.Shell.10.0.dll</HintPath>
+      <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.Shell.Interop, Version=7.1.40304.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
     <Reference Include="Microsoft.VisualStudio.Shell.Interop.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <EmbedInteropTypes>True</EmbedInteropTypes>
+    </Reference>
+    <Reference Include="Microsoft.VisualStudio.Shell.Interop.11.0, Version=11.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <EmbedInteropTypes>False</EmbedInteropTypes>
+      <Private>False</Private>
+      <HintPath>..\..\lib\Microsoft.VisualStudio.Shell.Interop.11.0.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.Shell.Interop.8.0, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
     <Reference Include="Microsoft.VisualStudio.Shell.Interop.9.0, Version=9.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
@@ -173,11 +190,6 @@
     <Compile Include="Extensions\PackageExtensions.cs" />
     <Compile Include="ProjectSystems\FSharpProjectSystem.cs" />
     <Compile Include="PSScriptExecutor.cs" />
-    <Compile Include="RecentRepository\IPersistencePackageSettingsManager.cs" />
-    <Compile Include="RecentRepository\IRecentPackageRepository.cs" />
-    <Compile Include="RecentRepository\PersistencePackageMetadata.cs" />
-    <Compile Include="RecentRepository\RecentPackagesRepository.cs" />
-    <Compile Include="RecentRepository\VsPersistencePackageSettingsManager.cs" />
     <Compile Include="RepositorySettings.cs" />
     <Compile Include="RuntimeHelpers.cs" />
     <Compile Include="SettingsManagerBase.cs" />
@@ -246,6 +258,10 @@
       <SubType>Designer</SubType>
       <Generator>MSBuild:Compile</Generator>
     </Page>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Properties\install.ps1" />
+    <None Include="Properties\NuGet.VisualStudio.nuspec" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

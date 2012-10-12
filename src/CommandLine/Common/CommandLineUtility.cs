@@ -1,19 +1,18 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 
 namespace NuGet
 {
-    internal static class CommandLineUtility
+    public static class CommandLineUtility
     {
         public readonly static string ApiKeysSectionName = "apikeys";
 
-        public static string GetApiKey(ISettings settings, string source, bool throwIfNotFound = true)
+        public static string GetApiKey(ISettings settings, string source)
         {
             var value = settings.GetDecryptedValue(CommandLineUtility.ApiKeysSectionName, source);
-            if (String.IsNullOrEmpty(value) && throwIfNotFound)
-            {
-                throw new CommandLineException(NuGetResources.NoApiKeyFound, GetSourceDisplayName(source));
-            }
             return value;
         }
 
@@ -38,15 +37,29 @@ namespace NuGet
             return "'" + source + "'";
         }
 
-        public static string GetUnambiguousFile(string searchPattern)
+        public static ICollection<PackageReference> GetPackageReferences(PackageReferenceFile file, string fileName, bool requireVersion)
         {
-            var files = Directory.GetFiles(Directory.GetCurrentDirectory(), searchPattern);
-            if (files.Length == 1)
+            if (file == null)
             {
-                return files[0];
+                throw new ArgumentNullException("file");
             }
 
-            return null;
+            var packageReferences = file.GetPackageReferences(requireVersion).ToList();
+            foreach (var package in packageReferences)
+            {
+                // GetPackageReferences returns all records without validating values. We'll throw if we encounter packages
+                // with malformed ids / Versions.
+                if (String.IsNullOrEmpty(package.Id))
+                {
+                    throw new InvalidDataException(String.Format(CultureInfo.CurrentCulture, NuGetResources.InstallCommandInvalidPackageReference, fileName));
+                }
+                if (requireVersion && (package.Version == null))
+                {
+                    throw new InvalidDataException(String.Format(CultureInfo.CurrentCulture, NuGetResources.InstallCommandPackageReferenceInvalidVersion, package.Id));
+                }
+            }
+
+            return packageReferences;
         }
     }
 }

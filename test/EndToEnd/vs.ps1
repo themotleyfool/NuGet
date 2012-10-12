@@ -208,7 +208,7 @@ function New-MvcApplication {
         [parameter(ValueFromPipeline = $true)]$SolutionFolder
     )
 
-    $SolutionFolder | New-Project EmptyMvcWebApplicationProjectTemplatev2.0.cs $ProjectName
+    $SolutionFolder | New-Project EmptyMvcWebApplicationProjectTemplatev4.0.csaspx $ProjectName
 }
 
 function New-WebSite {
@@ -506,10 +506,6 @@ function Close-Solution {
     if ($dte.Solution) {
         $dte.Solution.Close()
     }
-}
-
-function Clear-RecentPackageRepository() {
-    $host.PrivateData.RecentPackageRepository.Clear() | out-null
 }
 
 function Enable-PackageRestore {

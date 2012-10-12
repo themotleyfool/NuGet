@@ -2,18 +2,20 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
+using System.Resources;
+using System.Text;
 
 namespace NuGet
 {
     public static class ResourceHelper
     {
-        private static Dictionary<Tuple<Type, string>, string> _cachedResourceStrings;
+        private static Dictionary<Type, ResourceManager> _cachedManagers;
 
-        public static string GetLocalizedString(Type resourceType, string resourceName)
+        public static string GetLocalizedString(Type resourceType, string resourceNames)
         {
-            if (String.IsNullOrEmpty(resourceName))
+            if (String.IsNullOrEmpty(resourceNames))
             {
-                throw new ArgumentException(CommonResources.Argument_Cannot_Be_Null_Or_Empty, "resourceName");
+                throw new ArgumentException(CommonResources.Argument_Cannot_Be_Null_Or_Empty, "resourceNames");
             }
 
             if (resourceType == null)
@@ -21,41 +23,49 @@ namespace NuGet
                 throw new ArgumentNullException("resourceType");
             }
 
-            if (_cachedResourceStrings == null)
+            if (_cachedManagers == null)
             {
-                _cachedResourceStrings = new Dictionary<Tuple<Type, string>, string>();
+                _cachedManagers = new Dictionary<Type, ResourceManager>();
             }
 
-            var key = Tuple.Create(resourceType, resourceName);
-            string resourceValue;
-
-            if (!_cachedResourceStrings.TryGetValue(key, out resourceValue))
+            ResourceManager resourceManager;
+            if (!_cachedManagers.TryGetValue(resourceType, out resourceManager))
             {
-                PropertyInfo property = resourceType.GetProperty(resourceName, BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
+                PropertyInfo property = resourceType.GetProperty("ResourceManager", BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.Static);
 
-                if (property == null)
+                if (property == null || property.GetGetMethod(nonPublic: true) == null)
                 {
                     throw new InvalidOperationException(
-                        String.Format(CultureInfo.CurrentCulture, NuGetResources.ResourceTypeDoesNotHaveProperty, resourceType, resourceName));
+                        String.Format(CultureInfo.CurrentCulture, NuGetResources.ResourceTypeDoesNotHaveProperty, resourceType, "ResourceManager"));
                 }
 
-                if (property.PropertyType != typeof(string))
+                if (property.PropertyType != typeof(ResourceManager))
                 {
                     throw new InvalidOperationException(
-                        String.Format(CultureInfo.CurrentCulture, NuGetResources.ResourcePropertyNotStringType, resourceName, resourceType));
+                        String.Format(CultureInfo.CurrentCulture, NuGetResources.ResourcePropertyIncorrectType, resourceNames, resourceType));
                 }
 
-                MethodInfo getMethod = property.GetGetMethod(true);
-                if ((getMethod == null) || (!getMethod.IsAssembly && !getMethod.IsPublic))
-                {
-                    throw new InvalidOperationException(
-                        String.Format(CultureInfo.CurrentCulture, NuGetResources.ResourcePropertyDoesNotHaveAccessibleGet, resourceType, resourceName));
-                }
-                resourceValue = (string)property.GetValue(null, null);
-                _cachedResourceStrings[key] = resourceValue;
+                resourceManager = (ResourceManager)property.GetGetMethod(nonPublic: true)
+                                                           .Invoke(obj: null, parameters: null);
             }
 
-            return resourceValue;
+            var builder = new StringBuilder();
+            foreach (var resource in resourceNames.Split(';'))
+            {
+                string value = (string)resourceManager.GetString(resource);
+                if (String.IsNullOrEmpty(value))
+                {
+                    throw new InvalidOperationException(
+                            String.Format(CultureInfo.CurrentCulture, NuGetResources.ResourceTypeDoesNotHaveProperty, resourceType, resource));
+                }
+                if (builder.Length > 0)
+                {
+                    builder.AppendLine();
+                }
+                builder.Append(value);
+            }
+
+            return builder.ToString();
         }
     }
 }

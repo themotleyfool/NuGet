@@ -28,7 +28,7 @@ function Test-WebsiteSimpleInstall {
     Assert-Package $p MyAwesomeLibrary
     Assert-SolutionPackage MyAwesomeLibrary
     
-    $refreshFilePath = Join-Path $p.FullName "bin\MyAwesomeLibrary.dll.refresh"
+    $refreshFilePath = Join-Path (Get-ProjectDir $p) "bin\MyAwesomeLibrary.dll.refresh"
     $content = Get-Content $refreshFilePath
     
     Assert-AreEqual "..\packages\MyAwesomeLibrary.1.0\lib\net40\MyAwesomeLibrary.dll" $content
@@ -124,7 +124,7 @@ function Test-PackageWithIncompatibleAssembliesRollsInstallBack {
     $p = New-WebApplication
 
     # Act & Assert
-    Assert-Throws { Install-Package BingMapAppSDK -Project $p.Name -Source $context.RepositoryPath } "Could not install package 'BingMapAppSDK 1.0.1011.1716'. You are trying to install this package into a project that targets '.NETFramework,Version=v4.0', but the package does not contain any assembly references that are compatible with that framework. For more information, contact the package author."
+    Assert-Throws { Install-Package BingMapAppSDK -Project $p.Name -Source $context.RepositoryPath } "Could not install package 'BingMapAppSDK 1.0.1011.1716'. You are trying to install this package into a project that targets '.NETFramework,Version=v4.0', but the package does not contain any assembly references or content files that are compatible with that framework. For more information, contact the package author."
     Assert-Null (Get-ProjectPackage $p BingMapAppSDK 1.0.1011.1716)
     Assert-Null (Get-SolutionPackage BingMapAppSDK 1.0.1011.1716)
 }
@@ -395,7 +395,7 @@ function Test-InstallPackageWithUnsupportedReference {
     $p = New-ClassLibrary
     
     # Act
-    Assert-Throws { $p | Install-Package PackageWithUnsupportedReferences -Source $context.RepositoryRoot } "Could not install package 'PackageWithUnsupportedReferences 1.0'. You are trying to install this package into a project that targets '.NETFramework,Version=v4.0', but the package does not contain any assembly references that are compatible with that framework. For more information, contact the package author."
+    Assert-Throws { $p | Install-Package PackageWithUnsupportedReferences -Source $context.RepositoryRoot } "Could not install package 'PackageWithUnsupportedReferences 1.0'. You are trying to install this package into a project that targets '.NETFramework,Version=v4.0', but the package does not contain any assembly references or content files that are compatible with that framework. For more information, contact the package author."
 
     # Assert    
     Assert-Null (Get-ProjectPackage $p PackageWithUnsupportedReferences)
@@ -490,13 +490,13 @@ function Test-InstallPackageThatTargetsWindowsPhone {
     $p = New-WindowsPhoneClassLibrary
 
     # Arrange
-    $p | Install-Package MyAwesomeLibrary -Source $context.RepositoryRoot
+    $p | Install-Package WpPackage -Source $context.RepositoryPath
 
     # Assert
-    Assert-Package $p MyAwesomeLibrary
-    Assert-SolutionPackage MyAwesomeLibrary
-    $reference = Get-AssemblyReference $p MyAwesomeLibrary
-    Assert-True ($reference.Path.Contains("sl4-wp"))
+    Assert-Package $p WpPackage
+    Assert-SolutionPackage WpPackage
+    $reference = Get-AssemblyReference $p luan
+    Assert-True ($reference.Path.Contains("wp7"))
 }
 
 function Test-InstallPackageWithNonExistentFrameworkReferences {
@@ -549,9 +549,9 @@ function Test-SimpleBindingRedirects {
     # Arrange
     $a = New-WebApplication
     $b = New-WebSite
-    $c = New-FSharpConsoleApplication
+    
 
-    $projects = @($a, $b, $c)
+    $projects = @($a, $b)
 
     # Act
     $projects | Install-Package B -Version 2.0 -Source $context.RepositoryPath
@@ -569,8 +569,6 @@ function Test-SimpleBindingRedirects {
     Assert-BindingRedirect $a web.config D '0.0.0.0-2.0.0.0' '2.0.0.0'
     Assert-BindingRedirect $b web.config B '0.0.0.0-2.0.0.0' '2.0.0.0'
     Assert-BindingRedirect $b web.config D '0.0.0.0-2.0.0.0' '2.0.0.0'
-    Assert-BindingRedirect $c app.config B '0.0.0.0-2.0.0.0' '2.0.0.0'
-    Assert-BindingRedirect $c app.config D '0.0.0.0-2.0.0.0' '2.0.0.0'
 }
 
 function Test-BindingRedirectDoesNotAddToSilverlightProject {
@@ -849,7 +847,7 @@ function Test-InstallingPackageDoesNotOverwriteFileIfExistsOnDiskButNotInProject
 
     # Arrange
     $p = New-WebApplication
-    $projectPath = $p.Properties.Item("FullPath").Value
+    $projectPath = Get-ProjectDir $p
     $fooPath = Join-Path $projectPath foo
     "file content" > $fooPath
 
@@ -926,7 +924,7 @@ function Test-InstallPackageIntoSecondProjectWithIncompatibleAssembliesDoesNotRo
 
     # Act
     $p1 | Install-Package NuGet.Core    
-    Assert-Throws { $p2 | Install-Package NuGet.Core -Version 1.4.20615.9012 } "Could not install package 'NuGet.Core 1.4.20615.9012'. You are trying to install this package into a project that targets 'Silverlight,Version=v4.0,Profile=WindowsPhone', but the package does not contain any assembly references that are compatible with that framework. For more information, contact the package author."
+    Assert-Throws { $p2 | Install-Package NuGet.Core -Version 1.4.20615.9012 } "Could not install package 'NuGet.Core 1.4.20615.9012'. You are trying to install this package into a project that targets 'Silverlight,Version=v4.0,Profile=WindowsPhone71', but the package does not contain any assembly references or content files that are compatible with that framework. For more information, contact the package author."
 
     # Assert    
     Assert-Package $p1 NuGet.Core
@@ -1320,7 +1318,7 @@ function Test-InstallPackageWithReferences {
 
     # Assert - 1
     Assert-Reference $p1 ClassLibrary1
-    
+
     New-Solution "Test"
     # Arrange - 2
     $p2 = New-ClassLibrary
@@ -1374,10 +1372,10 @@ function Test-InstallPackageWithValuesFromPipe {
     $p = New-ClassLibrary
 
     # Act
-    Get-Package -ListAvailable -Source "https://go.microsoft.com/fwlink/?LinkID=206669" -Filter "Microsoft-web-helpers" | Install-Package
+    Get-Package -ListAvailable -Filter "Microsoft-web-helpers" | Install-Package
 
     # Assert
-    Assert-Package $p Microsoft-web-helpers
+    #Assert-Package $p Microsoft-web-helpers
 }
 
 function Test-ExplicitCallToAddBindingRedirectAddsBindingRedirectsToClassLibrary {
@@ -1432,19 +1430,6 @@ function Test-InstallPackageInstallsHighestPackageIfItIsReleaseWhenPreReleaseFla
 
     # Assert
     Assert-Package $a 'PreReleaseTestPackage.A' '1.0.0'
-}
-
-function Test-InstallingPrereleasePackageAddsItToRecentPackageList {
-    # Arrange
-    $a = New-ClassLibrary
-
-    # Act
-    $a | Install-Package -Source $context.RepositoryRoot PreReleaseTestPackage.A -PreRelease
-
-    # Assert
-    Assert-Package $a 'PreReleaseTestPackage.A' '1.0.0'
-    $p = @(Get-Package -Recent -Filter PreReleaseTestPackage.A)
-    Assert-AreEqual 1 $p.Count
 }
 
 function Test-InstallingPackagesWorksInTurkishLocaleWhenPackageIdContainsLetterI 
@@ -1706,15 +1691,28 @@ function Test-InstallPackageInstallContentFilesAccordingToTargetFramework2 {
     param($context)
 
     # Arrange
-    $project = New-SilverlightClassLibrary
+    $project = New-ClassLibrary
     
     # Act
     Install-Package TestTargetFxContentFiles -Project $project.Name -Source $context.RepositoryPath
     
     # Assert
     Assert-Package $project TestTargetFxContentFiles
-    Assert-Null (Get-ProjectItem $project "Sub\one.txt")
+    Assert-NotNull (Get-ProjectItem $project "Sub\one.txt")
     Assert-Null (Get-ProjectItem $project "two.txt")
+}
+
+function Test-InstallPackageThrowsIfThereIsNoCompatibleContentFiles
+{
+    param($context)
+
+    # Arrange
+    $project = New-SilverlightClassLibrary
+    
+    # Act & Assert
+
+	Assert-Throws { Install-Package TestTargetFxContentFiles -Project $project.Name -Source $context.RepositoryPath } "Could not install package 'TestTargetFxContentFiles 1.0.0'. You are trying to install this package into a project that targets 'Silverlight,Version=v4.0', but the package does not contain any assembly references or content files that are compatible with that framework. For more information, contact the package author."
+    Assert-NoPackage $project TestTargetFxContentFiles
 }
 
 function Test-InstallPackageExecuteCorrectInstallScriptsAccordingToTargetFramework {
@@ -1876,7 +1874,7 @@ function Test-InstallingSatellitePackageToWebsiteCopiesResourcesToBin
 	Assert-Package $p Test.fr-FR
 	Assert-Package $p Test
 	
-	$projectPath = $p.FullName
+	$projectPath = Get-ProjectDir $p
 	Assert-PathExists (Join-Path $projectPath "bin\Test.dll.refresh")
 	Assert-PathExists (Join-Path $projectPath "bin\Test.dll")
 	Assert-PathExists (Join-Path $projectPath "bin\fr-FR\Test.resources.dll")
@@ -1941,4 +1939,38 @@ function Test-InstallFailCleansUpSatellitePackageFiles
 	Assert-PathExists (Join-Path $solutionDir 'packages\A.1.2.0\')
 	Assert-PathNotExists (Join-Path $solutionDir 'packages\A.1.0.0\')
 	Assert-PathNotExists (Join-Path $solutionDir 'packages\A.fr.1.0.0\')
+}
+
+function Test-FileTransformWorksOnDependentFile
+{
+	param($context)
+
+	# Arrange 
+	$p = New-WebApplication
+	Install-Package TTFile -Source $context.RepositoryPath
+
+	# Act
+	Install-Package test -Source $context.RepositoryPath
+
+	# Assert
+
+	$projectDir = Split-Path -parent -path $p.FullName
+	$configFilePath = Join-Path -path $projectDir -childpath "one.config"
+	$content = get-content $configFilePath
+	$matches = @($content | ? { ($_.IndexOf('foo="bar"') -gt -1) })
+	Assert-True ($matches.Count -gt 0)
+}
+
+function Test-InstallMetaPackageWorksAsExpected
+{
+	param($context)
+
+	# Arrange
+	$p = New-ClassLibrary
+
+	$p | Install-Package MetaPackage -Source $context.RepositoryPath
+
+	# Assert
+	Assert-Package $p MetaPackage
+	Assert-Package $p Dependency
 }

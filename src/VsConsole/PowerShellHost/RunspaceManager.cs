@@ -60,13 +60,6 @@ namespace NuGetConsole.Host.PowerShell.Implementation
 
             Tuple<string, object>[] privateData = new Tuple<string, object>[] { pmfTuple };
 
-#if DEBUG
-            var recentPackageRepository = ServiceLocator.GetInstance<IRecentPackageRepository>();
-            var rprTuple = Tuple.Create<string, object>("recentPackageRepository", recentPackageRepository);
-
-            privateData = new[] { pmfTuple, rprTuple };
-#endif
-
             var host = new NuGetPSHost(hostName, privateData)
             {
                 ActiveConsole = console
@@ -113,9 +106,18 @@ namespace NuGetConsole.Host.PowerShell.Implementation
             runspace.ImportModule(modulePath);
 
 #if DEBUG
-            if (File.Exists(DebugConstants.TestModulePath))
+            // provide backdoor to enable function test
+            string functionalTestPath = Environment.GetEnvironmentVariable("FunctionalTestPath");
+            if (functionalTestPath != null && File.Exists(functionalTestPath))
             {
-                runspace.ImportModule(DebugConstants.TestModulePath);
+                runspace.ImportModule(functionalTestPath);
+            }
+            else
+            {
+                if (File.Exists(DebugConstants.TestModulePath))
+                {
+                    runspace.ImportModule(DebugConstants.TestModulePath);
+                }
             }
 #endif
         }

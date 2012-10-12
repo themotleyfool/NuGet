@@ -26,14 +26,24 @@ namespace NuGet.VisualStudio
         private DTE _dte;
         private IVsPackageInstallerServices _packageServices;
         private IOutputConsoleProvider _consoleProvider;
-        
+        private readonly IVsCommonOperations _vsCommonOperations;
+        private readonly ISolutionManager _solutionManager;
+
         [ImportingConstructor]
-        public VsTemplateWizard(IVsPackageInstaller installer, IVsWebsiteHandler websiteHandler, IVsPackageInstallerServices packageServices, IOutputConsoleProvider consoleProvider)
+        public VsTemplateWizard(
+            IVsPackageInstaller installer,
+            IVsWebsiteHandler websiteHandler,
+            IVsPackageInstallerServices packageServices,
+            IOutputConsoleProvider consoleProvider,
+            IVsCommonOperations vsCommonOperations,
+            ISolutionManager solutionManager)
         {
             _installer = installer;
             _websiteHandler = websiteHandler;
             _packageServices = packageServices;
             _consoleProvider = consoleProvider;
+            _vsCommonOperations = vsCommonOperations;
+            _solutionManager = solutionManager;
         }
 
         [Import]
@@ -306,12 +316,15 @@ namespace NuGet.VisualStudio
                 // RepositorySettings = null in unit tests
                 if (project.IsWebSite() && RepositorySettings != null)
                 {
-                    CreateRefreshFilesInBin(
-                        project,
-                        RepositorySettings.Value.RepositoryPath,
-                        _configuration.Packages.Where(p => p.SkipAssemblyReferences));
+                    using (_vsCommonOperations.SaveSolutionExplorerNodeStates(_solutionManager))
+                    {
+                        CreateRefreshFilesInBin(
+                            project,
+                            RepositorySettings.Value.RepositoryPath,
+                            _configuration.Packages.Where(p => p.SkipAssemblyReferences));
 
-                    CopyNativeBinariesToBin(project, RepositorySettings.Value.RepositoryPath, _configuration.Packages);
+                        CopyNativeBinariesToBin(project, RepositorySettings.Value.RepositoryPath, _configuration.Packages);
+                    }
                 }
             }
         }
@@ -338,8 +351,11 @@ namespace NuGet.VisualStudio
             }
 
             _dte = (DTE)automationObject;
-            var vsTemplatePath = (string)customParams[0];
-            _configuration = GetConfigurationFromVsTemplateFile(vsTemplatePath);
+            if (customParams.Length > 0)
+            {
+                var vsTemplatePath = (string)customParams[0];
+                _configuration = GetConfigurationFromVsTemplateFile(vsTemplatePath);
+            }
 
             if (replacementsDictionary != null)
             {
@@ -365,16 +381,36 @@ namespace NuGet.VisualStudio
                     string solutionDir = DetermineSolutionDirectory(replacementsDictionary);
                     if (!String.IsNullOrEmpty(solutionDir))
                     {
-                        solutionRepositoryPath = Path.Combine(solutionDir, NuGet.VisualStudio.RepositorySettings.DefaultRepositoryDirectory);
+                        // If the project is a Website that is created on an Http location, 
+                        // solutionDir may be an Http address, e.g. http://localhost.
+                        // In that case, we have to use forward slash instead of backward one.
+                        if (Uri.IsWellFormedUriString(solutionDir, UriKind.Absolute))
+                        {
+                            solutionRepositoryPath = PathUtility.EnsureTrailingForwardSlash(solutionDir) + NuGet.VisualStudio.RepositorySettings.DefaultRepositoryDirectory;
+                        }
+                        else
+                        {
+                            solutionRepositoryPath = Path.Combine(solutionDir, NuGet.VisualStudio.RepositorySettings.DefaultRepositoryDirectory);
+                        }
                     }
                 }
 
                 if (solutionRepositoryPath != null)
                 {
-                    targetInstallDir = PathUtility.EnsureTrailingSlash(targetInstallDir);
+                    // If the project is a Website that is created on an Http location, 
+                    // targetInstallDir may be an Http address, e.g. http://localhost.
+                    // In that case, we have to use forward slash instead of backward one.
+                    if (Uri.IsWellFormedUriString(targetInstallDir, UriKind.Absolute))
+                    {
+                        targetInstallDir = PathUtility.EnsureTrailingForwardSlash(targetInstallDir);
+                    }
+                    else
+                    {
+                        targetInstallDir = PathUtility.EnsureTrailingSlash(targetInstallDir);
+                    }
+
                     replacementsDictionary["$nugetpackagesfolder$"] =
-                        PathUtility.EnsureTrailingSlash(PathUtility.GetRelativePath(targetInstallDir,
-                                                                                    solutionRepositoryPath));
+                        PathUtility.EnsureTrailingSlash(PathUtility.GetRelativePath(targetInstallDir, solutionRepositoryPath));
                 }
             }
 

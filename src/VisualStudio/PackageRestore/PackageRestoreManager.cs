@@ -1,24 +1,29 @@
-﻿using System;
+﻿using EnvDTE;
+using Microsoft.VisualStudio.Project;
+using Microsoft.VisualStudio.Project.Designers;
+using Microsoft.VisualStudio.Shell.Interop;
+using NuGet.VisualStudio.Resources;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
-using EnvDTE;
-using Microsoft.VisualStudio.Shell.Interop;
-using NuGet.VisualStudio.Resources;
 using MsBuildProject = Microsoft.Build.Evaluation.Project;
+using System.Diagnostics.CodeAnalysis;
 
 namespace NuGet.VisualStudio
 {
     [Export(typeof(IPackageRestoreManager))]
     internal class PackageRestoreManager : IPackageRestoreManager
     {
+        private static readonly string NuGetExeFile = Path.Combine(VsConstants.NuGetSolutionSettingsFolder, "nuget.exe");
         private static readonly string NuGetTargetsFile = Path.Combine(VsConstants.NuGetSolutionSettingsFolder, "nuget.targets");
         private const string NuGetBuildPackageName = "NuGet.Build";
-        private const string NuGetBootstrapperPackageName = "NuGet.Bootstrapper";
+        private const string NuGetCommandLinePackageName = "NuGet.CommandLine";
 
         private readonly IFileSystemProvider _fileSystemProvider;
         private readonly IPackageSourceProvider _packageSourceProvider;
@@ -97,7 +102,8 @@ namespace NuGet.VisualStudio
                 }
 
                 IFileSystem fileSystem = _fileSystemProvider.GetFileSystem(solutionDirectory);
-                return fileSystem.FileExists(NuGetTargetsFile);
+                return fileSystem.FileExists(NuGetExeFile) &&
+                       fileSystem.FileExists(NuGetTargetsFile);
             }
         }
 
@@ -258,7 +264,8 @@ namespace NuGet.VisualStudio
         private void EnablePackageRestore(Project project, IVsPackageManager packageManager)
         {
             var projectManager = packageManager.GetProjectManager(project);
-            if (projectManager.LocalRepository.GetPackages().IsEmpty())
+            var projectPackageReferences = GetPackageReferences(projectManager);
+            if (projectPackageReferences.IsEmpty())
             {
                 // don't enable package restore for the project if it doesn't have at least one 
                 // nuget package installed
@@ -270,7 +277,7 @@ namespace NuGet.VisualStudio
 
         private void EnablePackageRestore(Project project)
         {
-            if (project.IsWebSite() || project.IsJavaScriptProject())
+            if (project.IsWebSite())
             {
                 // Can't do anything with Website
                 // Also, the Javascript Metro project system has some weird bugs 
@@ -278,22 +285,57 @@ namespace NuGet.VisualStudio
                 return;
             }
 
-            MsBuildProject buildProject = project.AsMSBuildProject();
-
-            AddSolutionDirProperty(project, buildProject);
-            AddNuGetTargets(project, buildProject);
-            SetMsBuildProjectProperty(project, buildProject, "RestorePackages", "true");
-
             if (project.IsJavaScriptProject())
             {
-                // JavaScript project requires an extra kick
-                // in order to save changes to the project file.
-                // TODO: Check with VS team to ask them to fix 
-                buildProject.Save();
+                EnablePackageRestoreForJavaScriptProject(project);
+            }
+            else
+            {
+                MsBuildProject buildProject = project.AsMSBuildProject();
+                EnablePackageRestore(project, buildProject, saveProjectWhenDone: true);
             }
         }
 
-        private void AddNuGetTargets(Project project, MsBuildProject buildProject)
+        // This method will only be called in VS 2012
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void EnablePackageRestoreForJavaScriptProject(Project javaScriptProject)
+        {
+            IVsHierarchy hierarchy = javaScriptProject.ToVsHierarchy();
+            IVsBrowseObjectContext context = hierarchy as IVsBrowseObjectContext;
+            if (context != null)
+            {
+                var service = context.UnconfiguredProject.ProjectService.Services.DirectAccessService;
+                if (service != null)
+                {
+                    service.Write(
+                        context.UnconfiguredProject.FullPath,
+                        dwa =>
+                        {
+                            MsBuildProject buildProject = dwa.GetProject(context.UnconfiguredProject.Services.SuggestedConfiguredProject);
+
+                            // When inside the Write lock, calling Project.Save() will cause a deadlock.
+                            // Thus we will save it after and outside of the Write lock.
+                            EnablePackageRestore(javaScriptProject, buildProject, saveProjectWhenDone: false);
+                        },
+                        ProjectAccess.Read | ProjectAccess.Write);
+
+                    javaScriptProject.Save();
+                }
+            }
+        }
+
+        private void EnablePackageRestore(Project project, MsBuildProject buildProject, bool saveProjectWhenDone)
+        {
+            AddSolutionDirProperty(buildProject);
+            AddNuGetTargets(buildProject);
+            SetMsBuildProjectProperty(buildProject, "RestorePackages", "true");
+            if (saveProjectWhenDone)
+            {
+                project.Save();
+            }
+        }
+
+        private void AddNuGetTargets(MsBuildProject buildProject)
         {
             string targetsPath = Path.Combine(@"$(SolutionDir)", NuGetTargetsFile);
 
@@ -302,12 +344,11 @@ namespace NuGet.VisualStudio
                 buildProject.Xml.Imports.All(import => !targetsPath.Equals(import.Project, StringComparison.OrdinalIgnoreCase)))
             {
                 buildProject.Xml.AddImport(targetsPath);
-                project.Save();
                 buildProject.ReevaluateIfNecessary();
             }
         }
 
-        private void AddSolutionDirProperty(Project project, MsBuildProject buildProject)
+        private void AddSolutionDirProperty(MsBuildProject buildProject)
         {
             const string solutiondir = "SolutionDir";
 
@@ -315,27 +356,24 @@ namespace NuGet.VisualStudio
                 buildProject.Xml.Properties.All(p => p.Name != solutiondir))
             {
                 string relativeSolutionPath = PathUtility.GetRelativePath(
-                    project.FullName,
+                    buildProject.FullPath,
                     PathUtility.EnsureTrailingSlash(_solutionManager.SolutionDirectory));
                 relativeSolutionPath = PathUtility.EnsureTrailingSlash(relativeSolutionPath);
-
+                
                 var solutionDirProperty = buildProject.Xml.AddProperty(solutiondir, relativeSolutionPath);
                 solutionDirProperty.Condition =
                     String.Format(
                         CultureInfo.InvariantCulture,
                         @"$({0}) == '' Or $({0}) == '*Undefined*'",
                         solutiondir);
-
-                project.Save();
             }
         }
 
-        private static void SetMsBuildProjectProperty(Project project, MsBuildProject buildProject, string name, string value)
+        private static void SetMsBuildProjectProperty(MsBuildProject buildProject, string name, string value)
         {
             if (!value.Equals(buildProject.GetPropertyValue(name), StringComparison.OrdinalIgnoreCase))
             {
                 buildProject.SetProperty(name, value);
-                project.Save();
             }
         }
 
@@ -347,16 +385,25 @@ namespace NuGet.VisualStudio
             IFileSystem fileSystem = _fileSystemProvider.GetFileSystem(solutionDirectory);
 
             if (!fileSystem.DirectoryExists(VsConstants.NuGetSolutionSettingsFolder) ||
+                !fileSystem.FileExists(NuGetExeFile) ||
                 !fileSystem.FileExists(NuGetTargetsFile))
             {
-                // download NuGet.Build and NuGet.Bootstrapper packages into the .nuget folder
+                // download NuGet.Build and NuGet.CommandLine packages into the .nuget folder
                 IPackageRepository repository = _packageSourceProvider.GetAggregate(_packageRepositoryFactory, ignoreFailingRepositories: true);
 
-                // Ensure we have packages before we attempt to add them.
-                var installPackages = new [] { GetPackage(repository, NuGetBuildPackageName, fromActivation), 
-                                               GetPackage(repository, NuGetBootstrapperPackageName, fromActivation) };
-                foreach (var package in installPackages)
+                var installPackages = new string[] { NuGetBuildPackageName, NuGetCommandLinePackageName };
+                foreach (var packageId in installPackages)
                 {
+                    IPackage package = GetPackage(repository, packageId, fromActivation);
+                    if (package == null)
+                    {
+                        throw new InvalidOperationException(
+                            String.Format(
+                                CultureInfo.CurrentCulture,
+                                VsResources.PackageRestoreDownloadPackageFailed,
+                                packageId));
+                    }
+
                     fileSystem.AddFiles(package.GetFiles(Constants.ToolsDirectory), VsConstants.NuGetSolutionSettingsFolder, preserveFilePath: false);
                 }
 
@@ -427,11 +474,7 @@ namespace NuGet.VisualStudio
 
             if (package == null)
             {
-                throw new InvalidOperationException(
-                            String.Format(
-                                CultureInfo.CurrentCulture,
-                                VsResources.PackageRestoreDownloadPackageFailed,
-                                packageId));
+                return null;
             }
 
             if (!fromCache)
@@ -494,6 +537,7 @@ namespace NuGet.VisualStudio
             CheckForMissingPackages();
         }
 
+        [SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes", Justification = "We don't care about exception handling here.")]
         private bool CheckForMissingPackagesCore()
         {
             // this can happen during unit tests
@@ -502,10 +546,19 @@ namespace NuGet.VisualStudio
                 return false;
             }
 
-            IVsPackageManager packageManager = _packageManagerFactory.CreatePackageManager();
-            IPackageRepository localRepository = packageManager.LocalRepository;
-            var projectReferences = GetAllPackageReferences(packageManager);
-            return projectReferences.Any(reference => !localRepository.Exists(reference.Id, reference.Version));
+            try
+            {
+                IVsPackageManager packageManager = _packageManagerFactory.CreatePackageManager();
+                IPackageRepository localRepository = packageManager.LocalRepository;
+                var projectReferences = GetAllPackageReferences(packageManager);
+                return projectReferences.Any(reference => !localRepository.Exists(reference.Id, reference.Version));
+            }
+            catch (Exception exception)
+            {
+                // if an exception happens during the check, assume no missing packages and move on.
+                ExceptionHelper.WriteToActivityLog(exception);
+                return false;
+            }
         }
 
         /// <summary>
@@ -515,9 +568,7 @@ namespace NuGet.VisualStudio
         private IEnumerable<PackageReference> GetAllPackageReferences(IVsPackageManager packageManager)
         {
             IEnumerable<PackageReference> projectReferences = from project in _solutionManager.GetProjects()
-                                                              from reference in
-                                                                  GetPackageReferences(
-                                                                      packageManager.GetProjectManager(project))
+                                                              from reference in GetPackageReferences(packageManager.GetProjectManager(project))
                                                               select reference;
 
             var localRepository = packageManager.LocalRepository as SharedPackageRepository;

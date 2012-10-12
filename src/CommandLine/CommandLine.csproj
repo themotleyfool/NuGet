@@ -54,7 +54,6 @@
     <Compile Include="Commands\SetApiKeyCommand.cs" />
     <Compile Include="Commands\SourcesCommand.cs" />
     <Compile Include="Commands\SpecCommand.cs" />
-    <Compile Include="Commands\PublishCommand.cs" />
     <Compile Include="Commands\DeleteCommand.cs" />
     <Compile Include="Commands\HelpCommand.cs" />
     <Compile Include="Commands\ICommand.cs" />
@@ -62,6 +61,7 @@
     <Compile Include="Commands\PackCommand.cs" />
     <Compile Include="Commands\PushCommand.cs" />
     <Compile Include="Commands\UpdateCommand.cs" />
+    <Compile Include="Common\Verbosity.cs" />
     <Compile Include="Common\AggregateRepositoryHelper.cs" />
     <Compile Include="..\..\Common\NuGetConstants.cs">
       <Link>Common\NuGetConstants.cs</Link>
@@ -75,13 +75,15 @@
     <Compile Include="Common\CommandLineUtility.cs" />
     <Compile Include="Common\Console.cs" />
     <Compile Include="Common\ConsoleCredentialProvider.cs" />
-    <Compile Include="Common\FileHelper.cs" />
     <Compile Include="Common\IConsole.cs" />
     <Compile Include="Common\IMSBuildProjectSystem.cs" />
     <Compile Include="Common\MSBuildProjectSystem.cs" />
     <Compile Include="Common\LocalizedResourceManager.cs" />
     <Compile Include="DefaultManifestValuesRule.cs" />
     <Compile Include="DefaultPackageRules.cs" />
+    <Compile Include="NuGetCommand.cs">
+      <DependentUpon>NuGetCommand.resx</DependentUpon>
+    </Compile>
     <Compile Include="Properties\GlobalSuppressions.cs" />
     <Compile Include="NuGetResources.Designer.cs">
       <AutoGen>True</AutoGen>
@@ -118,6 +120,7 @@
       <Link>Common\CommonResources.resx</Link>
       <DependentUpon>CommonResources.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="NuGetCommand.resx" />
     <EmbeddedResource Include="NuGetResources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>NuGetResources.Designer.cs</LastGenOutput>

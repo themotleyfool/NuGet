@@ -127,8 +127,7 @@ namespace NuGet
         {
             using (Stream stream = package.GetStream())
             {
-                byte[] packageBytes = stream.ReadAllBytes();
-                return Convert.ToBase64String(hashProvider.CalculateHash(packageBytes));
+                return Convert.ToBase64String(hashProvider.CalculateHash(stream));
             }
         }
 
@@ -146,16 +145,6 @@ namespace NuGet
                    package.AssemblyReferences.Any() ||
                    package.GetContentFiles().Any() ||
                    package.GetLibFiles().Any();
-        }
-
-        public static IEnumerable<FrameworkName> GetSupportedFrameworks(this IPackage package)
-        {
-            // The supported frameworks of a package is the union of the supported frameworks
-            // of Content/Lib/Tools folders and those of Framework Assemblies.
-            return package.FrameworkAssemblies
-                          .SelectMany(a => a.SupportedFrameworks)
-                          .Concat(package.GetFiles().SelectMany(a => a.SupportedFrameworks))
-                          .Distinct();
         }
 
         public static IEnumerable<PackageDependency> GetCompatiblePackageDependencies(this IPackageMetadata package, FrameworkName targetFramework)
@@ -186,8 +175,6 @@ namespace NuGet
         {
             return package.Id + " " + package.Version;
         }
-
-        
 
         /// <summary>
         /// Returns a distinct set of elements using the comparer specified. This implementation will pick the last occurrence

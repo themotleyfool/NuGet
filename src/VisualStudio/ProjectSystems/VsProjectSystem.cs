@@ -258,7 +258,7 @@ namespace NuGet.VisualStudio
 
         private bool FileExistsInProject(string path)
         {
-            return Project.GetProjectItem(path) != null;
+            return Project.ContainsFile(path);
         }
 
         protected virtual bool ExcludeFile(string path)
@@ -303,7 +303,6 @@ namespace NuGet.VisualStudio
         {
             if (recursive)
             {
-                // TODO: implement this when we really need it
                 throw new NotSupportedException();
             }
             else

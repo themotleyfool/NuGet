@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.Diagnostics;
-using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
@@ -13,7 +12,7 @@ using NuGet.Common;
 
 namespace NuGet.Commands
 {
-    [Command(typeof(NuGetResources), "install", "InstallCommandDescription",
+    [Command(typeof(NuGetCommand), "install", "InstallCommandDescription",
         MinArgs = 0, MaxArgs = 1, UsageSummaryResourceName = "InstallCommandUsageSummary",
         UsageDescriptionResourceName = "InstallCommandUsageDescription",
         UsageExampleResourceName = "InstallCommandUsageExamples")]
@@ -24,33 +23,36 @@ namespace NuGet.Commands
         private readonly List<string> _sources = new List<string>();
         private readonly ISettings _configSettings;
 
-        [Option(typeof(NuGetResources), "InstallCommandSourceDescription")]
+        [Option(typeof(NuGetCommand), "InstallCommandSourceDescription")]
         public ICollection<string> Source
         {
             get { return _sources; }
         }
 
-        [Option(typeof(NuGetResources), "InstallCommandOutputDirDescription")]
+        [Option(typeof(NuGetCommand), "InstallCommandOutputDirDescription")]
         public string OutputDirectory { get; set; }
 
-        [Option(typeof(NuGetResources), "InstallCommandVersionDescription")]
+        [Option(typeof(NuGetCommand), "InstallCommandVersionDescription")]
         public string Version { get; set; }
 
-        [Option(typeof(NuGetResources), "InstallCommandExcludeVersionDescription", AltName = "x")]
+        [Option(typeof(NuGetCommand), "InstallCommandExcludeVersionDescription", AltName = "x")]
         public bool ExcludeVersion { get; set; }
 
-        [Option(typeof(NuGetResources), "InstallCommandPrerelease")]
+        [Option(typeof(NuGetCommand), "InstallCommandPrerelease")]
         public bool Prerelease { get; set; }
 
-        [Option(typeof(NuGetResources), "InstallCommandNoCache")]
+        [Option(typeof(NuGetCommand), "InstallCommandNoCache")]
         public bool NoCache { get; set; }
 
-        [Option(typeof(NuGetResources), "InstallCommandRequireConsent")]
+        [Option(typeof(NuGetCommand), "InstallCommandRequireConsent")]
         public bool RequireConsent { get; set; }
 
-        public IPackageRepositoryFactory RepositoryFactory { get; private set; }
+        [Option(typeof(NuGetCommand), "InstallCommandSolutionDirectory")]
+        public string SolutionDirectory { get; set; }
 
-        public IPackageSourceProvider SourceProvider { get; private set; }
+        private IPackageRepositoryFactory RepositoryFactory { get; set; }
+
+        private IPackageSourceProvider SourceProvider { get; set; }
 
         /// <remarks>
         /// Meant for unit testing.
@@ -66,8 +68,8 @@ namespace NuGet.Commands
         }
 
         [ImportingConstructor]
-        public InstallCommand(IPackageRepositoryFactory packageRepositoryFactory, IPackageSourceProvider sourceProvider)
-            : this(packageRepositoryFactory, sourceProvider, Settings.LoadDefaultSettings(), MachineCache.Default)
+        public InstallCommand(IPackageRepositoryFactory packageRepositoryFactory, IPackageSourceProvider sourceProvider, IFileSystem startingPoint)
+            : this(packageRepositoryFactory, sourceProvider, Settings.LoadDefaultSettings(startingPoint), MachineCache.Default)
         {
         }
 
@@ -100,18 +102,19 @@ namespace NuGet.Commands
 
         public override void ExecuteCommand()
         {
-            IFileSystem fileSystem = CreateFileSystem();
+            string installPath = ResolveInstallPath();
+            IFileSystem fileSystem = CreateFileSystem(installPath);
 
             // If the first argument is a packages.config file, install everything it lists
             // Otherwise, treat the first argument as a package Id
             if (Arguments.Count == 0 || Path.GetFileName(Arguments[0]).Equals(Constants.PackageReferenceFile, StringComparison.OrdinalIgnoreCase))
             {
                 Prerelease = true;
-                var configFilePath = Arguments.Count == 0 ? Constants.PackageReferenceFile : Path.GetFullPath(Arguments[0]);
+                var configFilePath = Path.GetFullPath(Arguments.Count == 0 ? Constants.PackageReferenceFile : Arguments[0]);
                 // By default the PackageReferenceFile does not throw if the file does not exist at the specified path.
                 // We'll try reading from the file so that the file system throws a file not found
                 EnsureFileExists(fileSystem, configFilePath);
-                InstallPackagesFromConfigFile(fileSystem, GetPackageReferenceFile(configFilePath));
+                InstallPackagesFromConfigFile(fileSystem, GetPackageReferenceFile(configFilePath), configFilePath);
             }
             else
             {
@@ -131,6 +134,41 @@ namespace NuGet.Commands
             return new PackageReferenceFile(Path.GetFullPath(path));
         }
 
+        internal string ResolveInstallPath()
+        {
+            if (!String.IsNullOrEmpty(OutputDirectory))
+            {
+                // Use the OutputDirectory if specified.
+                return OutputDirectory;
+            }
+
+            // If the SolutionDir is specified, use the .nuget directory under it to determine the solution-level settings
+            ISettings currentSettings = _configSettings;
+            if (!String.IsNullOrEmpty(SolutionDirectory))
+            {
+                var solutionSettingsFile = Path.Combine(SolutionDirectory.TrimEnd(Path.DirectorySeparatorChar), NuGetConstants.NuGetSolutionSettingsFolder);
+                var fileSystem = CreateFileSystem(solutionSettingsFile);
+
+                currentSettings = Settings.LoadDefaultSettings(fileSystem);
+            }
+
+            string installPath = currentSettings.GetRepositoryPath();
+            if (!String.IsNullOrEmpty(installPath))
+            {
+                // If a value is specified in config, use that. 
+                return installPath;
+            }
+
+            if (!String.IsNullOrEmpty(SolutionDirectory))
+            {
+                // For package restore scenarios, deduce the path of the packages directory from the solution directory.
+                return Path.Combine(SolutionDirectory, CommandLineConstants.PackagesDirectoryName);
+            }
+
+            // Use the current directory as output.
+            return Directory.GetCurrentDirectory();
+        }
+
         private IPackageRepository GetRepository()
         {
             var repository = AggregateRepositoryHelper.CreateAggregateRepositoryFromSources(RepositoryFactory, SourceProvider, Source);
@@ -143,46 +181,19 @@ namespace NuGet.Commands
             return repository;
         }
 
-        private void InstallPackagesFromConfigFile(IFileSystem fileSystem, PackageReferenceFile file)
+        private void InstallPackagesFromConfigFile(IFileSystem fileSystem, PackageReferenceFile file, string fileName)
         {
-            var packageReferences = file.GetPackageReferences().ToList();
-            foreach (var package in packageReferences)
-            {
-                if (String.IsNullOrEmpty(package.Id))
-                {
-                    // GetPackageReferences returns all records without validating values. We'll throw if we encounter packages
-                    // with malformed ids / Versions.
-                    throw new InvalidDataException(String.Format(CultureInfo.CurrentCulture, NuGetResources.InstallCommandInvalidPackageReference, Arguments[0]));
-                }
-                else if (package.Version == null)
-                {
-                    throw new InvalidDataException(String.Format(CultureInfo.CurrentCulture, NuGetResources.InstallCommandPackageReferenceInvalidVersion, package.Id));
-                }
-            }
+            var packageReferences = CommandLineUtility.GetPackageReferences(file, fileName, requireVersion: true);
 
-            try
+            bool installedAny = ExecuteInParallel(fileSystem, packageReferences);
+            if (!installedAny && packageReferences.Any())
             {
-                bool installedAny = ExecuteInParallel(fileSystem, packageReferences);
-                if (!installedAny && packageReferences.Any())
-                {
-                    Console.WriteLine(NuGetResources.InstallCommandNothingToInstall, Constants.PackageReferenceFile);
-                }
-            }
-            catch (AggregateException exception)
-            {
-                if (ExceptionUtility.Unwrap(exception) == exception)
-                {
-                    // If the AggregateException contains more than one InnerException, it cannot be unwrapped. In which case, simply print out individual error messages
-                    var messages = exception.InnerExceptions.Select(ex => ex.Message)
-                                                            .Distinct(StringComparer.CurrentCulture);
-                    Console.WriteError(String.Join("\n", messages));
-                }
-                throw;
+                Console.WriteLine(NuGetResources.InstallCommandNothingToInstall, Constants.PackageReferenceFile);
             }
         }
 
         /// <returns>True if one or more packages are installed.</returns>
-        private bool ExecuteInParallel(IFileSystem fileSystem, List<PackageReference> packageReferences)
+        private bool ExecuteInParallel(IFileSystem fileSystem, ICollection<PackageReference> packageReferences)
         {
             bool packageRestoreConsent = new PackageRestoreConsent(_configSettings).IsGranted;
             int defaultConnectionLimit = ServicePointManager.DefaultConnectionLimit;
@@ -196,6 +207,7 @@ namespace NuGet.Commands
                             Task.Factory.StartNew(() => RestorePackage(fileSystem, package.Id, package.Version, packageRestoreConsent, satellitePackages))).ToArray();
 
             Task.WaitAll(tasks);
+            // Return true if we installed any satellite packages or if any of our install tasks succeeded.
             return InstallSatellitePackages(fileSystem, satellitePackages) ||
                    tasks.All(p => !p.IsFaulted && p.Result);
         }
@@ -232,7 +244,7 @@ namespace NuGet.Commands
             using (packageManager.SourceRepository.StartOperation(RepositoryOperationNames.Restore))
             {
                 var package = PackageHelper.ResolvePackage(packageManager.SourceRepository, packageId, version);
-                if (satellitePackages != null && package.IsSatellitePackage())
+                if (package.IsSatellitePackage())
                 {
                     // Satellite packages would necessarily have to be installed later than the corresponding package. 
                     // We'll collect them in a list to keep track and then install them later.
@@ -273,8 +285,9 @@ namespace NuGet.Commands
         {
             var repository = GetRepository();
             var pathResolver = new DefaultPackagePathResolver(fileSystem, useSideBySidePaths: AllowMultipleVersions);
-            var packageManager = new PackageManager(repository, pathResolver, fileSystem,
-                                                    new LocalPackageRepository(pathResolver, fileSystem))
+
+            IPackageRepository localRepository = new LocalPackageRepository(pathResolver, fileSystem);
+            var packageManager = new PackageManager(repository, pathResolver, fileSystem, localRepository)
                                  {
                                      Logger = Console
                                  };
@@ -282,12 +295,9 @@ namespace NuGet.Commands
             return packageManager;
         }
 
-        protected virtual IFileSystem CreateFileSystem()
+        protected internal virtual IFileSystem CreateFileSystem(string path)
         {
-            // Use the passed in install path if any, and default to the current dir
-            string installPath = OutputDirectory ?? Directory.GetCurrentDirectory();
-
-            return new PhysicalFileSystem(installPath);
+            return new PhysicalFileSystem(path);
         }
 
         private static void EnsureFileExists(IFileSystem fileSystem, string configFilePath)
@@ -306,7 +316,7 @@ namespace NuGet.Commands
             }
         }
 
-        // Do a very quick check of whether a package in installed by checked whether the nupkg file exists
+        // Do a very quick check of whether a package in installed by checking whether the nupkg file exists
         private bool IsPackageInstalled(IPackageRepository repository, IFileSystem fileSystem, string packageId, SemanticVersion version)
         {
             if (!AllowMultipleVersions)
@@ -326,6 +336,7 @@ namespace NuGet.Commands
             }
             return false;
         }
+
 
         /// <summary>
         /// We want to base the lock name off of the full path of the package, however, the Mutex looks for files on disk if a path is given.

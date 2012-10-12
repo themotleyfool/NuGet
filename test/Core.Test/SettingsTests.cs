@@ -4,6 +4,7 @@ using System.IO;
 using Moq;
 using Xunit;
 using NuGet.Test.Mocks;
+using Xunit.Extensions;
 
 namespace NuGet.Test
 {
@@ -952,6 +953,289 @@ namespace NuGet.Test
             // Assert
             Assert.True(result);
             settings.Verify();
+        }
+
+        [Fact]
+        public void GetValueIgnoresClearedValues()
+        {
+            // Arrange
+            var mockFileSystem = new MockFileSystem();
+            var nugetConfigPath = "NuGet.Config";
+            string config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key1"" value=""foo"" />
+    <clear />
+    <add key=""key2"" value=""bar"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile(nugetConfigPath, config);
+            Settings settings = new Settings(mockFileSystem);
+
+            // Act
+            var result1 = settings.GetValue("SectionName", "Key1");
+            var result2 = settings.GetValue("SectionName", "Key2");
+
+            // Assert
+            Assert.Null(result1);
+            Assert.Equal("bar", result2);
+        }
+
+        private void AssertEqualCollections(IList<KeyValuePair<string, string>> actual, string[] expected)
+        {
+            Assert.Equal(actual.Count, expected.Length/2);
+            for (int i=0;i<actual.Count;++i)
+            {
+                Assert.Equal(expected[2 * i], actual[i].Key);
+                Assert.Equal(expected[2 * i + 1], actual[i].Value);
+            }
+        }
+
+        [Fact]
+        public void GetValuesIgnoresClearedValues()
+        {
+            // Arrange
+            var mockFileSystem = new MockFileSystem();
+            var nugetConfigPath = "NuGet.Config";
+            string config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key1"" value=""value1"" />
+    <add key=""key2"" value=""value2"" />
+    <clear />
+    <add key=""key3"" value=""value3"" />
+    <add key=""key4"" value=""value4"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile(nugetConfigPath, config);
+            Settings settings = new Settings(mockFileSystem);
+
+            // Act
+            var result = settings.GetValues("SectionName");
+            
+
+            // Assert
+            AssertEqualCollections(result, new [] { "key3", "value3", "key4", "value4"});            
+        }
+
+
+
+        [Fact]
+        public void GetValuesMultipleConfFilesAdditive()
+        {
+            // Arrange
+            var mockFileSystem = new MockFileSystem(@"C:\mockfilesystem\dir1\dir2");
+            string config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key3"" value=""value3"" />
+    <add key=""key4"" value=""value4"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile("NuGet.Config", config);
+            config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key1"" value=""value1"" />
+    <add key=""key2"" value=""value2"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile(@"C:\mockfilesystem\dir1\NuGet.Config", config);
+
+            var settings = Settings.LoadDefaultSettings(mockFileSystem);
+
+            // Act
+            var result = settings.GetValues("SectionName");
+
+            // Assert
+            AssertEqualCollections(result, new[] {"key1", "value1", "key2", "value2" , "key3", "value3", "key4", "value4" });
+        }
+
+        [Fact]
+        public void GetValuesMultipleConfFilesClear()
+        {
+            // Arrange
+            var mockFileSystem = new MockFileSystem(@"C:\mockfilesystem\dir1\dir2");
+            string config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <clear /> <!-- i.e. ignore values from prior conf files -->
+    <add key=""key3"" value=""value3"" />
+    <add key=""key4"" value=""value4"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile("NuGet.Config", config);
+            config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key1"" value=""value1"" />
+    <add key=""key2"" value=""value2"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile(@"C:\mockfilesystem\dir1\NuGet.Config", config);
+
+            var settings = Settings.LoadDefaultSettings(mockFileSystem);
+
+            // Act
+            var result = settings.GetValues("SectionName");
+
+            // Assert
+            AssertEqualCollections(result, new[] { "key3", "value3", "key4", "value4" });
+        }
+
+        [Fact]
+        public void GetSingleValuesMultipleConfFiles()
+        {
+            // Arrange
+            var mockFileSystem = new MockFileSystem(@"C:\mockfilesystem\dir1\dir2");
+            string config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key3"" value=""value3"" />
+    <add key=""key4"" value=""value4"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile("NuGet.Config", config);
+            config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key1"" value=""value1"" />
+    <add key=""key2"" value=""value2"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile(@"C:\mockfilesystem\dir1\NuGet.Config", config);
+
+            var settings = Settings.LoadDefaultSettings(mockFileSystem);
+
+            // Assert
+            Assert.Equal("value4", settings.GetValue("SectionName", "key4"));
+            Assert.Equal("value3", settings.GetValue("SectionName", "key3"));
+            Assert.Equal("value2", settings.GetValue("SectionName", "key2"));
+            Assert.Equal("value1", settings.GetValue("SectionName", "key1"));
+        }
+
+        [Fact]
+        public void GetSingleValuesMultipleConfFilesWithDupes()
+        {
+            // Arrange
+            var mockFileSystem = new MockFileSystem(@"C:\mockfilesystem\dir1\dir2");
+            string config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key1"" value=""LastOneWins1"" />
+    <add key=""key2"" value=""LastOneWins2"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile(@"NuGet.Config", config);
+            config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key1"" value=""value1"" />
+    <add key=""key2"" value=""value2"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile(@"C:\mockfilesystem\dir1\NuGet.Config", config);
+
+            var settings = Settings.LoadDefaultSettings(mockFileSystem);
+
+            // Assert
+            Assert.Equal("LastOneWins2", settings.GetValue("SectionName", "key2"));
+            Assert.Equal("LastOneWins1", settings.GetValue("SectionName", "key1"));
+        }
+
+        [Fact]
+        public void GetSingleValuesMultipleConfFilesClear()
+        {
+            // Arrange
+            var mockFileSystem = new MockFileSystem(@"C:\mockfilesystem\dir1\dir2");
+            string config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <clear /> <!-- i.e. ignore values from prior conf files -->
+    <add key=""key2"" value=""value2"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile("NuGet.Config", config);
+            config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""key1"" value=""value1"" />    
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile(@"C:\mockfilesystem\dir1\NuGet.Config", config);
+
+            var settings = Settings.LoadDefaultSettings(mockFileSystem);
+
+            // Assert
+            Assert.Equal("value2", settings.GetValue("SectionName", "key2"));
+            Assert.Equal(null, settings.GetValue("SectionName", "key1"));
+        }
+
+        [Fact]
+        public void GetValueReturnsPathRelativeToConfigWhenPathIsNotRooted()
+        {
+            // Arrange
+            var mockFileSystem = new MockFileSystem(@"x:\mock-directory\");
+            string config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""path-key"" value=""foo\bar"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.AddFile("nuget.config", config);
+            var settings = new Settings(mockFileSystem, "nuget.config");
+
+            // Act
+            string result = settings.GetValue("SectionName", "path-key", isPath: true);
+
+            // Assert
+            Assert.Equal(@"x:\mock-directory\foo\bar", result);
+        }
+
+        [Theory]
+        [InlineData(@"z:\foo")]
+        [InlineData(@"x:\foo\bar\qux")]
+        public void GetValueReturnsPathWhenPathIsRooted(string value)
+        {
+            // Arrange
+            var mockFileSystem = new MockFileSystem(@"x:\mock-directory\");
+            string config = String.Format(@"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""path-key"" value=""{0}"" />
+  </SectionName>
+</configuration>", value);
+            mockFileSystem.AddFile("nuget.config", config);
+            var settings = new Settings(mockFileSystem, "nuget.config");
+
+            // Act
+            string result = settings.GetValue("SectionName", "path-key", isPath: true);
+
+            // Assert
+            Assert.Equal(value, result);
+        }
+
+        [Fact]
+        public void GetValueResolvesRelativePaths()
+        {
+            // Arrange
+            var mockFileSystem = new Mock<MockFileSystem>(@"x:\mock-directory\") { CallBase = true };
+            mockFileSystem.Setup(f => f.GetFullPath(@"x:\mock-directory\..\Blah")).Returns(@"x:\mock-directory\Qux\Blah").Verifiable();
+            string config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <SectionName>
+    <add key=""path-key"" value=""..\Blah"" />
+  </SectionName>
+</configuration>";
+            mockFileSystem.Object.AddFile("nuget.config", config);
+            var settings = new Settings(mockFileSystem.Object, "nuget.config");
+
+            // Act
+            string result = settings.GetValue("SectionName", "path-key", isPath: true);
+
+            // Assert
+            mockFileSystem.Verify();
+            Assert.Equal(@"x:\mock-directory\Qux\Blah", result);
         }
     }
 }

@@ -34,7 +34,7 @@ namespace NuGet.VisualStudio.Test
             var solutionManager = new Mock<ISolutionManager>();
             solutionManager.Setup(m => m.SolutionDirectory).Returns(@"bar\baz");
             var fileSystemProvider = new Mock<IFileSystemProvider>();
-            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz")).Returns(new MockFileSystem());
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(new MockFileSystem());
             var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
 
             // Act
@@ -57,7 +57,7 @@ namespace NuGet.VisualStudio.Test
 </settings>");
             solutionManager.Setup(m => m.SolutionDirectory).Returns(@"bar\baz");
             var fileSystemProvider = new Mock<IFileSystemProvider>();
-            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz")).Returns(fileSystem);
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
             var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
 
             // Act
@@ -80,7 +80,7 @@ namespace NuGet.VisualStudio.Test
 </settings>");
             solutionManager.Setup(m => m.SolutionDirectory).Returns(@"bar\baz");
             var fileSystemProvider = new Mock<IFileSystemProvider>();
-            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz")).Returns(fileSystem);
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
             var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
 
             // Act
@@ -102,7 +102,7 @@ namespace NuGet.VisualStudio.Test
     <repositoryPath
 </settings>");
             var fileSystemProvider = new Mock<IFileSystemProvider>();
-            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz")).Returns(fileSystem);
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
             var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
 
             // Act & Assert
@@ -121,7 +121,7 @@ namespace NuGet.VisualStudio.Test
     <repositoryPath>lib</repositoryPath>
 </settings>");
             var fileSystemProvider = new Mock<IFileSystemProvider>();
-            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz")).Returns(fileSystem);
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
             var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
 
             // Act
@@ -134,10 +134,65 @@ namespace NuGet.VisualStudio.Test
 
             string p2 = repositorySettings.RepositoryPath;
 
-
             // Assert
             Assert.Equal(@"bar\lib", p1);
             Assert.Equal(@"bar\lib", p2);
+        }
+
+        [Fact]
+        public void RepositoryPathUnderSolutionSettingsFolderIsConsideredFirst()
+        {
+            // Arrange
+            var solutionManager = new Mock<ISolutionManager>();
+            solutionManager.Setup(m => m.SolutionDirectory).Returns(@"bar\baz");
+            var fileSystem = new MockFileSystem();
+            fileSystem.AddFile(@"bar\baz\nuget.config", @"
+<configuration>
+    <repositoryPath>lib</repositoryPath>
+</configuration>");
+
+            fileSystem.AddFile(@"bar\baz\.nuget\nuget.config", @"
+<configuration>
+    <repositoryPath>x:\demo</repositoryPath>
+</configuration>");
+
+            var fileSystemProvider = new Mock<IFileSystemProvider>();
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
+            var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
+
+            // Act
+            string p = repositorySettings.RepositoryPath;
+
+            // Assert
+            Assert.Equal(@"x:\demo", p);
+        }
+
+        [Fact]
+        public void RepositoryPathAtSolutionRootFolderIsConsideredBeforeParentFolder()
+        {
+            // Arrange
+            var solutionManager = new Mock<ISolutionManager>();
+            solutionManager.Setup(m => m.SolutionDirectory).Returns(@"bar\baz");
+            var fileSystem = new MockFileSystem();
+            fileSystem.AddFile(@"bar\nuget.config", @"
+<configuration>
+    <repositoryPath>lib</repositoryPath>
+</configuration>");
+
+            fileSystem.AddFile(@"bar\baz\nuget.config", @"
+<configuration>
+    <repositoryPath>x:\demo</repositoryPath>
+</configuration>");
+
+            var fileSystemProvider = new Mock<IFileSystemProvider>();
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
+            var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
+
+            // Act
+            string p = repositorySettings.RepositoryPath;
+
+            // Assert
+            Assert.Equal(@"x:\demo", p);
         }
 
         [Fact]
@@ -152,7 +207,7 @@ namespace NuGet.VisualStudio.Test
     <repositoryPath>lib</repositoryPath>
 </settings>");
             var fileSystemProvider = new Mock<IFileSystemProvider>();
-            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz")).Returns(fileSystem);
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
             var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
 
             // Act
@@ -183,7 +238,7 @@ namespace NuGet.VisualStudio.Test
     <repositoryPath>lib</repositoryPath>
 </settings>");
             var fileSystemProvider = new Mock<IFileSystemProvider>();
-            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz")).Returns(fileSystem);
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
             var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
 
             // Act
@@ -211,7 +266,7 @@ namespace NuGet.VisualStudio.Test
     <repositoryPath>lib</repositoryPath>
 </settings>");
             var fileSystemProvider = new Mock<IFileSystemProvider>();
-            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz")).Returns(fileSystem);
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
             var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, new Mock<IVsSourceControlTracker>().Object);
 
             // Act
@@ -243,7 +298,7 @@ namespace NuGet.VisualStudio.Test
     <repositoryPath>lib</repositoryPath>
 </settings>");
             var fileSystemProvider = new Mock<IFileSystemProvider>();
-            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz")).Returns(fileSystem);
+            fileSystemProvider.Setup(m => m.GetFileSystem(@"bar\baz\.nuget")).Returns(fileSystem);
 
             var sourceControlTracker = new Mock<IVsSourceControlTracker>();
             var repositorySettings = new RepositorySettings(solutionManager.Object, fileSystemProvider.Object, sourceControlTracker.Object);
@@ -265,5 +320,7 @@ namespace NuGet.VisualStudio.Test
             Assert.Equal(@"bar\lib", p1);
             Assert.Equal(@"bar\baz\foo", p2);
         }
+
+
     }
 }

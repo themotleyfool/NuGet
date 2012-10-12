@@ -170,7 +170,7 @@ namespace NuGet
                 return;
             }
 
-            ExpandFiles(package);
+            OnExpandFiles(args);
 
             LocalRepository.AddPackage(package);
 
@@ -279,7 +279,7 @@ namespace NuGet
                 return;
             }
 
-            RemoveFiles(package);
+            OnRemoveFiles(args);
             // Remove package to the repository
             LocalRepository.RemovePackage(package);
 
@@ -292,9 +292,6 @@ namespace NuGet
         {
             string packageDirectory = PathResolver.GetPackageDirectory(package);
 
-            // Remove resource files
-            FileSystem.DeleteFiles(package.GetFiles(), packageDirectory);
-
             // If this is a Satellite Package, then remove the files from the related runtime package folder too
             IPackage runtimePackage;
             if (PackageUtility.IsSatellitePackage(package, LocalRepository, targetFramework: null, runtimePackage: out runtimePackage))
@@ -303,14 +300,24 @@ namespace NuGet
                 var runtimePath = PathResolver.GetPackageDirectory(runtimePackage);
                 FileSystem.DeleteFiles(satelliteFiles, runtimePath);
             }
+
+            // Remove package files
+            // IMPORTANT: This has to be done AFTER removing satellite files from runtime package,
+            // because starting from 2.1, we read satellite files directly from package files, instead of .nupkg
+            FileSystem.DeleteFiles(package.GetFiles(), packageDirectory);
         }
 
-        private void OnInstalling(PackageOperationEventArgs e)
+        protected virtual void OnInstalling(PackageOperationEventArgs e)
         {
             if (PackageInstalling != null)
             {
                 PackageInstalling(this, e);
             }
+        }
+
+        protected virtual void OnExpandFiles(PackageOperationEventArgs e)
+        {
+            ExpandFiles(e.Package);
         }
 
         protected virtual void OnInstalled(PackageOperationEventArgs e)
@@ -321,19 +328,24 @@ namespace NuGet
             }
         }
 
+        protected virtual void OnUninstalling(PackageOperationEventArgs e)
+        {
+            if (PackageUninstalling != null)
+            {
+                PackageUninstalling(this, e);
+            }
+        }
+
+        protected virtual void OnRemoveFiles(PackageOperationEventArgs e)
+        {
+            RemoveFiles(e.Package);
+        }
+
         protected virtual void OnUninstalled(PackageOperationEventArgs e)
         {
             if (PackageUninstalled != null)
             {
                 PackageUninstalled(this, e);
-            }
-        }
-
-        private void OnUninstalling(PackageOperationEventArgs e)
-        {
-            if (PackageUninstalling != null)
-            {
-                PackageUninstalling(this, e);
             }
         }
 

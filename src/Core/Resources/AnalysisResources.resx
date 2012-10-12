@@ -144,6 +144,15 @@
   <data name="InvalidFrameworkTitle" xml:space="preserve">
     <value>Invalid framework folder.</value>
   </data>
+  <data name="MisplacedInitScriptDescription" xml:space="preserve">
+    <value>The file '{0}' will be ignored by Microsoft because it is not directly under 'tools' folder.</value>
+  </data>
+  <data name="MisplacedInitScriptSolution" xml:space="preserve">
+    <value>Place the file directly under 'tools' folder.</value>
+  </data>
+  <data name="MisplacedInitScriptTitle" xml:space="preserve">
+    <value>Init.ps1 script will be ignored.</value>
+  </data>
   <data name="MisplacedTransformFileDescription" xml:space="preserve">
     <value>The transform file '{0}' is outside the 'content' folder and hence will not be transformed during installation of this package.</value>
   </data>
@@ -162,15 +171,6 @@
   <data name="MissingSummaryTitle" xml:space="preserve">
     <value>Consider providing Summary text.</value>
   </data>
-  <data name="NonAssemblyInLibDescription" xml:space="preserve">
-    <value>The file '{0}' is not a valid assembly. If it is an XML documentation file or a .pdb file, there is no matching assembly specified in the same folder.</value>
-  </data>
-  <data name="NonAssemblyInLibSolution" xml:space="preserve">
-    <value>Either remove this file from 'lib' folder or add a matching .dll for it.</value>
-  </data>
-  <data name="NonAssemblyInLibTitle" xml:space="preserve">
-    <value>Incompatible files in lib folder.</value>
-  </data>
   <data name="ScriptOutsideToolsDescription" xml:space="preserve">
     <value>The script file '{0}' is outside the 'tools' folder and hence will not be executed during installation of this package.</value>
   </data>
@@ -188,5 +188,14 @@
   </data>
   <data name="UnrecognizedScriptTitle" xml:space="preserve">
     <value>Unrecognized PowerScript file.</value>
+  </data>
+  <data name="WinRTObsoleteDescription" xml:space="preserve">
+    <value>The file at '{0}' uses the obsolete 'WinRT' as the framework folder.</value>
+  </data>
+  <data name="WinRTObsoleteSolution" xml:space="preserve">
+    <value>Replace 'WinRT' or 'WinRT45' with 'NetCore45'.</value>
+  </data>
+  <data name="WinRTObsoleteTitle" xml:space="preserve">
+    <value>The framework name 'WinRT' is obsolete.</value>
   </data>
 </root>

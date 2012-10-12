@@ -69,6 +69,116 @@ namespace NuGet.Test
             Assert.True(projectSystem.FileExists(@"foo\bar\file"));
         }
 
+        [Theory]
+        [InlineData("net20\\one.txt", ".NETFramework, Version=4.0")]
+        [InlineData("silverlight3\\one.txt", "Silverlight, Version=4.0")]
+        [InlineData("wp7\\one.txt", "WindowsPhone, Version=8.0")]
+        [InlineData("wp7\\one.txt", "Silverlight, Version=4.0, Profile=WindowsPhone71")]
+        [InlineData("windows8\\one.txt", ".NETCore, Version=4.5")]
+        public void AddPackageReferencePicksSpecificLibraryOverPortableOne(string pickedContentFile, string projectFramework)
+        {
+            // Arrange            
+            var sourceRepository = new MockPackageRepository();
+            var projectSystem = new MockProjectSystem(new FrameworkName(projectFramework));
+            var projectManager = new ProjectManager(sourceRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, new MockPackageRepository());
+            IPackage packageA = PackageUtility.CreatePackage("A", "1.0", new[] { "portable40-net40+wp7+silverlight4+windows\\two.txt", pickedContentFile});
+            sourceRepository.AddPackage(packageA);
+
+            // Act
+            projectManager.AddPackageReference("A");
+
+            // Assert
+            Assert.False(projectSystem.FileExists("two.txt"));
+            Assert.True(projectSystem.FileExists("one.txt"));
+        }
+
+        [Theory]
+        [InlineData("portable-wp7+sl3+net40\\two.txt", "portable-net45+sl4\\one.txt")]
+        [InlineData("portable-net40+sl3+wp71\\one.txt", "portable-windows8+sl2\\two.txt")]
+        public void AddPackageReferencePicksThePortableLibraryWithHigherVersionOfTheMatchingFrameworks(string contentFile, string otherContentFile)
+        {
+            // Arrange            
+            var sourceRepository = new MockPackageRepository();
+            var projectSystem = new MockProjectSystem(new FrameworkName("Silverlight, Version=4.0"));
+            var projectManager = new ProjectManager(sourceRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, new MockPackageRepository());
+            IPackage packageA = PackageUtility.CreatePackage("A", "1.0", new[] { contentFile, otherContentFile });
+            sourceRepository.AddPackage(packageA);
+
+            // Act
+            projectManager.AddPackageReference("A");
+
+            // Assert
+            Assert.True(projectSystem.FileExists("one.txt"));
+            Assert.False(projectSystem.FileExists("two.txt"));
+        }
+
+        [Fact]
+        public void AddPackageReferencePicksThePortableLibraryWithMoreMatchingVersionsWhenInstalledIntoPortableProject()
+        {
+            // Arrange            
+            var sourceRepository = new MockPackageRepository();
+            var projectSystem = new MockProjectSystem(VersionUtility.ParseFrameworkName("portable-net45+sl5+wp71"));
+            var projectManager = new ProjectManager(sourceRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, new MockPackageRepository());
+            IPackage packageA = PackageUtility.CreatePackage(
+                "A", 
+                "1.0", 
+                new[] { "portable-net45+sl5+wp8\\one.txt",
+                        "portable-net45+sl5+wp71\\two.txt",
+                        "portable-net45+sl5+wp71+win8\\three.txt",
+                        "portable-net45+sl4+wp71+win8\\four.txt",
+                        "portable-net40+sl4+wp71+win8\\five.txt",
+                        "portable-net40+sl4+wp7+win8\\six.txt",
+                        "portable-wp8+win8\\seven.txt" });
+            
+            sourceRepository.AddPackage(packageA);
+
+            // Act
+            projectManager.AddPackageReference("A");
+
+            // Assert
+            Assert.False(projectSystem.FileExists("one.txt"));
+            Assert.True(projectSystem.FileExists("two.txt"));
+            Assert.False(projectSystem.FileExists("three.txt"));
+            Assert.False(projectSystem.FileExists("three.txt"));
+            Assert.False(projectSystem.FileExists("four.txt"));
+            Assert.False(projectSystem.FileExists("five.txt"));
+            Assert.False(projectSystem.FileExists("six.txt"));
+            Assert.False(projectSystem.FileExists("seven.txt"));
+        }
+
+        [Fact]
+        public void AddPackageReferencePicksThePortableLibraryWithMoreMatchingVersionsWhenInstalledIntoPortableProject2()
+        {
+            // Arrange            
+            var sourceRepository = new MockPackageRepository();
+            var projectSystem = new MockProjectSystem(VersionUtility.ParseFrameworkName("portable-net45+sl5+wp71"));
+            var projectManager = new ProjectManager(sourceRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, new MockPackageRepository());
+            IPackage packageA = PackageUtility.CreatePackage(
+                "A",
+                "1.0",
+                new[] { "portable-net45+sl5+wp8\\one.txt",
+                        "portable-net45+sl5+wp8\\two.txt",
+                        "portable-net45+sl5+wp71+win8\\three.txt",
+                        "portable-net45+sl4+wp71+win8\\four.txt",
+                        "portable-net40+sl4+wp71+win8\\five.txt",
+                        "portable-net40+sl4+wp7+win8\\six.txt",
+                        "portable-wp8+win8\\seven.txt" });
+
+            sourceRepository.AddPackage(packageA);
+
+            // Act
+            projectManager.AddPackageReference("A");
+
+            // Assert
+            Assert.False(projectSystem.FileExists("one.txt"));
+            Assert.False(projectSystem.FileExists("two.txt"));
+            Assert.True(projectSystem.FileExists("three.txt"));
+            Assert.False(projectSystem.FileExists("four.txt"));
+            Assert.False(projectSystem.FileExists("five.txt"));
+            Assert.False(projectSystem.FileExists("six.txt"));
+            Assert.False(projectSystem.FileExists("seven.txt"));
+        }
+
         [Fact]
         public void AddPackageReferenceWhenNewVersionOfPackageAlreadyReferencedThrows()
         {
@@ -1423,12 +1533,14 @@ namespace NuGet.Test
             sourceRepository.AddPackage(mockPackage.Object);
 
             // Act & Assert            
-            ExceptionAssert.Throws<InvalidOperationException>(() => projectManager.AddPackageReference("A"), "Could not install package 'A 1.0'. You are trying to install this package into a project that targets '.NETFramework,Version=v2.0', but the package does not contain any assembly references that are compatible with that framework. For more information, contact the package author.");
+            ExceptionAssert.Throws<InvalidOperationException>(
+                () => projectManager.AddPackageReference("A"), 
+                "Could not install package 'A 1.0'. You are trying to install this package into a project that targets '.NETFramework,Version=v2.0', but the package does not contain any assembly references or content files that are compatible with that framework. For more information, contact the package author.");
             Assert.False(localRepository.Exists(mockPackage.Object));
         }
 
         [Fact]
-        public void AddPackageReferenceWithAnyNonCompatibleFrameworkReferenceDoesNotThrow()
+        public void AddPackageReferenceWithAnyNonCompatibleFrameworkReferenceDoesThrow()
         {
             // Arrange
             var mockProjectSystem = new Mock<MockProjectSystem>() { CallBase = true };
@@ -1444,9 +1556,11 @@ namespace NuGet.Test
             mockPackage.Setup(m => m.FrameworkAssemblies).Returns(new[] { frameworkReference });
             sourceRepository.AddPackage(mockPackage.Object);
 
-            // Act & Assert            
-            projectManager.AddPackageReference("A");
-            Assert.True(localRepository.Exists(mockPackage.Object));
+            // Act & Assert
+            ExceptionAssert.Throws<InvalidOperationException>(
+                () => projectManager.AddPackageReference("A"));
+
+            Assert.False(localRepository.Exists(mockPackage.Object));
         }
 
         [Fact]
@@ -1459,7 +1573,7 @@ namespace NuGet.Test
             var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
             var packageA = PackageUtility.CreatePackage("A", "1.0",
                                                         new[] { "net20\\contentFile", "net35\\jQuery.js", "foo.css" },
-                                                        new[] { "reference.dll" });
+                                                        new[] { "lib\\reference.dll" });
 
             mockRepository.AddPackage(packageA);
 
@@ -1482,7 +1596,7 @@ namespace NuGet.Test
             var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
             var packageA = PackageUtility.CreatePackage("A", "1.0",
                                                         new[] { "sl3\\contentFile", "winrt45\\jQuery.js", "sub\\foo.css" },
-                                                        new[] { "reference.dll" });
+                                                        new[] { "lib\\reference.dll" });
 
             mockRepository.AddPackage(packageA);
 
@@ -1505,7 +1619,7 @@ namespace NuGet.Test
             var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
             var packageA = PackageUtility.CreatePackage("A", "1.0",
                                                         new[] { "sl3\\contentFile", "winrt45\\jQuery.js" },
-                                                        new[] { "reference.dll" });
+                                                        new[] { "lib\\reference.dll" });
 
             mockRepository.AddPackage(packageA);
 
@@ -1527,7 +1641,7 @@ namespace NuGet.Test
             var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
             var packageA = PackageUtility.CreatePackage("A", "1.0",
                                                         new[] { "net20\\contentFile", "net35\\jQuery.js", "foo.css" },
-                                                        new[] { "reference.dll" });
+                                                        new[] { "lib\\reference.dll" });
 
             mockRepository.AddPackage(packageA);
 
@@ -1550,7 +1664,7 @@ namespace NuGet.Test
             var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
             var packageA = PackageUtility.CreatePackage("A", "1.0",
                                                         new[] { "net20\\contentFile", "net35\\sub\\jQuery.js", "net35\\style.css.pp", "foo.css" },
-                                                        new[] { "reference.dll" });
+                                                        new[] { "lib\\reference.dll" });
 
             mockRepository.AddPackage(packageA);
 
@@ -1577,7 +1691,7 @@ namespace NuGet.Test
             var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
             var packageA = PackageUtility.CreatePackage("A", "1.0",
                                                         new[] { "net20\\contentFile", "net35\\jQuery.js", "foo.css" },
-                                                        new[] { "reference.dll" });
+                                                        new[] { "lib\\eference.dll" });
             mockRepository.AddPackage(packageA);
             projectManager.AddPackageReference("A");
             Assert.True(projectSystem.FileExists(@"contentFile"));
@@ -1590,6 +1704,114 @@ namespace NuGet.Test
             Assert.True(projectSystem.FileExists(@"jQuery.js"));
             Assert.True(projectSystem.FileExists(@"foo.css"));
             Assert.False(localRepository.Exists("A"));
+        }
+
+        [Fact]
+        public void AddPackageReferenceThrowsIfThereIsNoCompatibleFrameworkFolderUnderContent()
+        {
+            // Arrange
+            var projectSystem = new MockProjectSystem(new FrameworkName(".NETFramework", new Version("4.0")));
+            var localRepository = new MockPackageRepository();
+            var mockRepository = new MockPackageRepository();
+            var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
+            var packageA = PackageUtility.CreatePackage("A", "1.0",
+                                                        content: new[] { "silverlight\\reference.txt" });
+
+            mockRepository.AddPackage(packageA);
+
+            // Act
+            ExceptionAssert.Throws<InvalidOperationException>(() => projectManager.AddPackageReference("A"));
+
+            // Assert
+            Assert.False(localRepository.Exists("A"));
+        }
+
+        [Fact]
+        public void AddPackageReferenceThrowsIfThereIsNoCompatibleFrameworkFolderUnderContentAndLib()
+        {
+            // Arrange
+            var projectSystem = new MockProjectSystem(new FrameworkName(".NETFramework", new Version("4.0")));
+            var localRepository = new MockPackageRepository();
+            var mockRepository = new MockPackageRepository();
+            var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
+            var packageA = PackageUtility.CreatePackage("A", "1.0",
+                                                        content: new[] { "silverlight\\reference.txt" },
+                                                        assemblyReferences: new string[] { "lib\\windows8\\one.dll" });
+
+            mockRepository.AddPackage(packageA);
+
+            // Act
+            ExceptionAssert.Throws<InvalidOperationException>(() => projectManager.AddPackageReference("A"));
+
+            // Assert
+            Assert.False(localRepository.Exists("A"));
+        }
+
+        [Fact]
+        public void AddPackageReferenceDoesNotThrowIfThereIfThereIsCompatibleAssemblyInLibButNotInContent()
+        {
+            // Arrange
+            var projectSystem = new MockProjectSystem(new FrameworkName(".NETFramework", new Version("4.0")));
+            var localRepository = new MockPackageRepository();
+            var mockRepository = new MockPackageRepository();
+            var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
+            var packageA = PackageUtility.CreatePackage("A", "1.0",
+                                                        content: new[] { "silverlight\\reference.txt" },
+                                                        assemblyReferences: new string[] { "lib\\net20\\one.dll" });
+
+            mockRepository.AddPackage(packageA);
+
+            // Act
+            projectManager.AddPackageReference("A");
+
+            // Assert
+            Assert.True(localRepository.Exists("A"));
+            Assert.True(projectSystem.ReferenceExists("one.dll"));
+            Assert.False(projectSystem.FileExists("reference.txt"));
+        }
+
+        [Fact]
+        public void AddPackageReferenceDoesNotThrowIfThereIfThereIsCompatibleAssemblyInContentButNotInLib()
+        {
+            // Arrange
+            var projectSystem = new MockProjectSystem(new FrameworkName(".NETFramework", new Version("4.0")));
+            var localRepository = new MockPackageRepository();
+            var mockRepository = new MockPackageRepository();
+            var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
+            var packageA = PackageUtility.CreatePackage("A", "1.0",
+                                                        content: new[] { "net20\\reference.txt" },
+                                                        assemblyReferences: new string[] { "lib\\WindowsPhone7\\one.dll" });
+
+            mockRepository.AddPackage(packageA);
+
+            // Act
+            projectManager.AddPackageReference("A");
+
+            // Assert
+            Assert.True(localRepository.Exists("A"));
+            Assert.False(projectSystem.ReferenceExists("one.dll"));
+            Assert.True(projectSystem.FileExists("reference.txt"));
+        }
+
+        [Fact]
+        public void AddPackageReferenceAcceptsMetaPackage()
+        {
+            // Arrange
+            var projectSystem = new MockProjectSystem(new FrameworkName(".NETFramework", new Version("4.0")));
+            var localRepository = new MockPackageRepository();
+            var mockRepository = new MockPackageRepository();
+            var projectManager = new ProjectManager(mockRepository, new DefaultPackagePathResolver(projectSystem), projectSystem, localRepository);
+            var packageA = PackageUtility.CreatePackage("A", "1.0", dependencies: new [] { new PackageDependency("B") });
+            var packageB = PackageUtility.CreatePackage("B", "1.0-alpha", new [] { "net\\hello.txt" });
+            mockRepository.AddPackage(packageA);
+            mockRepository.AddPackage(packageB);
+
+            // Act
+            projectManager.AddPackageReference("A", version: null, ignoreDependencies: false, allowPrereleaseVersions: true);
+
+            // Assert
+            Assert.True(localRepository.Exists("A"));
+            Assert.True(localRepository.Exists("B"));
         }
 
         [Fact]
@@ -1823,7 +2045,7 @@ namespace NuGet.Test
 
             IPackage packageB = PackageUtility.CreatePackage("B", "1.0", content: new[] { "b.txt" });
 
-            IPackage packageC = PackageUtility.CreatePackage("C", "2.0", content: new[] { "sl4\\c.txt" });
+            IPackage packageC = PackageUtility.CreatePackage("C", "2.0", content: new[] { "sl4\\c.txt", "net\\d.txt" });
 
             sourceRepository.AddPackage(packageB);
             sourceRepository.AddPackage(packageA);
@@ -1840,6 +2062,7 @@ namespace NuGet.Test
             Assert.True(projectSystem.FileExists("a.txt"));
             Assert.False(projectSystem.FileExists("b.txt"));
             Assert.False(projectSystem.FileExists("c.txt"));
+            Assert.True(projectSystem.FileExists("d.txt"));
         }
 
         [Theory]

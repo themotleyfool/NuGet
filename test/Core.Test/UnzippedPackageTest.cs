@@ -5,6 +5,7 @@ using System.Linq;
 using System.Runtime.Versioning;
 using NuGet.Test.Mocks;
 using Xunit;
+using Moq;
 
 namespace NuGet.Test
 {
@@ -126,6 +127,46 @@ namespace NuGet.Test
         }
 
         [Fact]
+        public void GetFilesDoesNotIncludePackageFile()
+        {
+            // Arrange
+            var fileSystem = new MockFileSystem();
+            AddPackage(fileSystem, "X", "2.0.0-alpha");
+
+            fileSystem.AddFile(@"X.2.0.0-alpha\readme.txt");
+            fileSystem.AddFile(@"X.2.0.0-alpha\x.nupkg");
+
+            var package = new UnzippedPackage(fileSystem, "X.2.0.0-alpha");
+
+            // Act
+            IList<IPackageFile> files = package.GetFiles().OrderBy(p => p.Path).ToList();
+
+            // Assert
+            Assert.Equal(1, files.Count);
+            Assert.Equal(@"readme.txt", files[0].Path);
+        }
+
+        [Fact]
+        public void GetFilesDoesNotIncludeManifestFile()
+        {
+            // Arrange
+            var fileSystem = new MockFileSystem();
+            AddPackage(fileSystem, "X", "2.0.0-alpha");
+
+            fileSystem.AddFile(@"X.2.0.0-alpha\readme.txt");
+            fileSystem.AddFile(@"X.2.0.0-alpha\y.nuspec");
+
+            var package = new UnzippedPackage(fileSystem, "X.2.0.0-alpha");
+
+            // Act
+            IList<IPackageFile> files = package.GetFiles().OrderBy(p => p.Path).ToList();
+
+            // Assert
+            Assert.Equal(1, files.Count);
+            Assert.Equal(@"readme.txt", files[0].Path);
+        }
+
+        [Fact]
         public void GetAssemblyReferencesReturnsCorrectFiles()
         {
             // Arrange
@@ -151,6 +192,46 @@ namespace NuGet.Test
             Assert.Equal(2, files.Count);
             Assert.Equal(@"lib\net45\jQuery.dll", files[0].Path);
             Assert.Equal(@"lib\sl3\nunit.winmd", files[1].Path);
+        }
+
+        [Fact]
+        public void GetSupportedFrameworksUsesFilesToDetermineFramework()
+        {
+            // Arrange
+            var fileSystem = new MockFileSystem();
+            fileSystem.AddFile(@"X.2.0.0-alpha\readme.txt");
+            fileSystem.AddFile(@"X.2.0.0-alpha\content\jQuery.js");
+            fileSystem.AddFile(@"X.2.0.0-alpha\lib\net45\jQuery.dll");
+            fileSystem.AddFile(@"X.2.0.0-alpha\lib\net45\jQuery.resources.dll");
+            fileSystem.AddFile(@"X.2.0.0-alpha\lib\net45\jQuery.dll.xml");
+            fileSystem.AddFile(@"X.2.0.0-alpha\lib\sl3\nunit.exe");
+            fileSystem.AddFile(@"X.2.0.0-alpha\lib\sl3\nunit.winmd");
+            fileSystem.AddFile(@"X.2.0.0-alpha\tools\install.ps1");
+            fileSystem.AddFile(@"X.2.0.0-alpha\tools\init.ps1");
+
+            AddPackage(fileSystem, "X", "2.0.0-alpha");
+            var package = new UnzippedPackage(fileSystem, "X.2.0.0-alpha");
+
+            // Act
+            var supportedFramework = package.GetSupportedFrameworks();
+
+            // Assert
+            Assert.Equal(new[] { new FrameworkName(".NETFramework,Version=v4.5"), new FrameworkName("Silverlight,Version=v3.0") }, supportedFramework);
+        }
+
+        [Fact]
+        public void GetSupportedFrameworksUsesFrameworkReferenceToDetermineFramework()
+        {
+            // Arrange
+            var fileSystem = new MockFileSystem();
+            fileSystem.AddFile(@"X.2.0.0-alpha\X.2.0.0-alpha.nuspec", GetCompleteManifestContent());
+            var package = new UnzippedPackage(fileSystem, "X.2.0.0-alpha");
+
+            // Act
+            var supportedFramework = package.GetSupportedFrameworks();
+
+            // Assert
+            Assert.Equal(new[] { new FrameworkName(".NETFramework,Version=v4.5") }, supportedFramework);
         }
 
         private void AddPackage(MockFileSystem fileSystem, string id, string version)

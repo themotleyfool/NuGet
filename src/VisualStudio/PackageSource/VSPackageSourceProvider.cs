@@ -31,15 +31,24 @@ namespace NuGet.VisualStudio
         private readonly IPackageSourceProvider _packageSourceProvider;
         private readonly IVsShellInfo _vsShellInfo;
         private readonly ISettings _settings;
+        private readonly ISolutionManager _solutionManager;
         private bool _initialized;
         private List<PackageSource> _packageSources;
         private PackageSource _activePackageSource;
 
         [ImportingConstructor]
         public VsPackageSourceProvider(
-            ISettings settings,
+            ISettings settings,            
+            IVsShellInfo vsShellInfo,
+            ISolutionManager solutionManager) :
+            this(settings, new PackageSourceProvider(settings, new[] { NuGetDefaultSource }, _feedsToMigrate), vsShellInfo, solutionManager)
+        {
+        }
+
+        public VsPackageSourceProvider(
+            ISettings settings,            
             IVsShellInfo vsShellInfo) :
-            this(settings, new PackageSourceProvider(settings, new[] { NuGetDefaultSource }, _feedsToMigrate), vsShellInfo)
+            this(settings, vsShellInfo, null)
         {
         }
 
@@ -47,6 +56,15 @@ namespace NuGet.VisualStudio
             ISettings settings,
             IPackageSourceProvider packageSourceProvider,
             IVsShellInfo vsShellInfo)
+            :this(settings, packageSourceProvider, vsShellInfo, null)
+        {
+        }
+
+        private VsPackageSourceProvider(
+            ISettings settings,            
+            IPackageSourceProvider packageSourceProvider,
+            IVsShellInfo vsShellInfo,
+            ISolutionManager solutionManager)
         {
             if (settings == null)
             {
@@ -64,8 +82,20 @@ namespace NuGet.VisualStudio
             }
 
             _packageSourceProvider = packageSourceProvider;
+            _solutionManager = solutionManager;
             _settings = settings;
             _vsShellInfo = vsShellInfo;
+
+            if (null != _solutionManager)
+            {
+                _solutionManager.SolutionClosed += OnSolutionOpenedOrClosed;
+                _solutionManager.SolutionOpened += OnSolutionOpenedOrClosed;
+            }
+        }
+
+        private void OnSolutionOpenedOrClosed(object sender, EventArgs e)
+        {
+            _initialized = false;
         }
 
         public PackageSource ActivePackageSource
@@ -145,7 +175,7 @@ namespace NuGet.VisualStudio
 
         private void EnsureInitialized()
         {
-            if (!_initialized)
+            while (!_initialized)
             {
                 _initialized = true;
                 _packageSources = _packageSourceProvider.LoadPackageSources().ToList();
@@ -153,10 +183,14 @@ namespace NuGet.VisualStudio
                 // Unlike NuGet Core, Visual Studio has the concept of an official package source. 
                 // We find the official source, if present, and set its IsOfficial it.
                 var officialPackageSource = _packageSources.FirstOrDefault(packageSource => IsOfficialPackageSource(packageSource));
-                if (officialPackageSource != null)
+                if (officialPackageSource == null)
                 {
-                    officialPackageSource.IsOfficial = true;
+                    // if there is no official source, add one, but make it disabled
+                    officialPackageSource = NuGetDefaultSource.Clone();
+                    officialPackageSource.IsEnabled = false;
+                    _packageSources.Add(officialPackageSource);
                 }
+                officialPackageSource.IsOfficial = true;
 
                 // When running Visual Studio Express for Windows 8, we insert the curated feed at the top
                 if (_vsShellInfo.IsVisualStudioExpressForWindows8)

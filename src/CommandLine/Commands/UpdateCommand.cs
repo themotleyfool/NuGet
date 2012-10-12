@@ -9,35 +9,41 @@ using NuGet.Common;
 
 namespace NuGet.Commands
 {
-    [Command(typeof(NuGetResources), "update", "UpdateCommandDescription", UsageSummary = "<packages.config|solution>",
+    [Command(typeof(NuGetCommand), "update", "UpdateCommandDescription", UsageSummary = "<packages.config|solution>",
         UsageExampleResourceName = "UpdateCommandUsageExamples")]
     public class UpdateCommand : Command
     {
         private const string NuGetCommandLinePackageId = "NuGet.CommandLine";
         private const string NuGetExe = "NuGet.exe";
-        private const string PackagesFolder = "packages";
 
         private readonly List<string> _sources = new List<string>();
         private readonly List<string> _ids = new List<string>();
+        private readonly IFileSystem _fileSystem;
+
+        public UpdateCommand(IPackageRepositoryFactory repositoryFactory, IPackageSourceProvider sourceProvider)
+            :this(repositoryFactory, sourceProvider, new PhysicalFileSystem(Directory.GetCurrentDirectory()))
+        {            
+        }
 
         [ImportingConstructor]
-        public UpdateCommand(IPackageRepositoryFactory repositoryFactory, IPackageSourceProvider sourceProvider)
+        public UpdateCommand(IPackageRepositoryFactory repositoryFactory, IPackageSourceProvider sourceProvider, IFileSystem fileSystem)
         {
             RepositoryFactory = repositoryFactory;
             SourceProvider = sourceProvider;
+            _fileSystem = fileSystem;
         }
 
         public IPackageRepositoryFactory RepositoryFactory { get; private set; }
 
         public IPackageSourceProvider SourceProvider { get; private set; }
 
-        [Option(typeof(NuGetResources), "UpdateCommandSourceDescription")]
+        [Option(typeof(NuGetCommand), "UpdateCommandSourceDescription")]
         public ICollection<string> Source
         {
             get { return _sources; }
         }
 
-        [Option(typeof(NuGetResources), "UpdateCommandIdDescription")]
+        [Option(typeof(NuGetCommand), "UpdateCommandIdDescription")]
         public ICollection<string> Id
         {
             get { return _ids; }
@@ -49,16 +55,16 @@ namespace NuGet.Commands
         [Option(typeof(NuGetResources), "UpdateCommandRepositoryPathDescription")]
         public string RepositoryPath { get; set; }
 
-        [Option(typeof(NuGetResources), "UpdateCommandSafeDescription")]
+        [Option(typeof(NuGetCommand), "UpdateCommandSafeDescription")]
         public bool Safe { get; set; }
 
-        [Option(typeof(NuGetResources), "UpdateCommandSelfDescription")]
+        [Option(typeof(NuGetCommand), "UpdateCommandSelfDescription")]
         public bool Self { get; set; }
 
-        [Option(typeof(NuGetResources), "UpdateCommandVerboseDescription")]
+        [Option(typeof(NuGetCommand), "UpdateCommandVerboseDescription")]
         public bool Verbose { get; set; }
 
-        [Option(typeof(NuGetResources), "UpdateCommandPrerelease")]
+        [Option(typeof(NuGetCommand), "UpdateCommandPrerelease")]
         public bool Prerelease { get; set; }
 
         public override void ExecuteCommand()
@@ -83,7 +89,7 @@ namespace NuGet.Commands
                 }
                 else
                 {
-                    if (!File.Exists(inputFile))
+                    if (!_fileSystem.FileExists(inputFile))
                     {
                         throw new CommandLineException(NuGetResources.UnableToFindSolution, inputFile);
                     }
@@ -94,6 +100,11 @@ namespace NuGet.Commands
                     }
                 }
             }
+        }
+
+        private ISettings DefaultSettings
+        {
+            get { return Settings.LoadDefaultSettings(_fileSystem); }
         }
 
         [System.Diagnostics.CodeAnalysis.SuppressMessage("Microsoft.Design", "CA1031:DoNotCatchGeneralExceptionTypes")]
@@ -197,31 +208,36 @@ namespace NuGet.Commands
             project = project ?? GetMSBuildProject(packagesConfigPath);
 
             // Resolve the repository path
-            repositoryPath = repositoryPath ?? GetReposioryPath(project.Root);
+            repositoryPath = repositoryPath ?? GetRepositoryPath(project.Root);
 
             var pathResolver = new DefaultPackagePathResolver(repositoryPath);
 
             // Create the local and source repositories
-            var localRepository = new PackageReferenceRepository(project, new SharedPackageRepository(repositoryPath));
+            var sharedPackageRepository = new SharedPackageRepository(repositoryPath);
+            var localRepository = new PackageReferenceRepository(project, sharedPackageRepository);
             sourceRepository = sourceRepository ?? AggregateRepositoryHelper.CreateAggregateRepositoryFromSources(RepositoryFactory, SourceProvider, Source);
             IPackageConstraintProvider constraintProvider = localRepository;
 
             Console.WriteLine(NuGetResources.UpdatingProject, project.ProjectName);
-            UpdatePackages(localRepository, sourceRepository, constraintProvider, pathResolver, project);
+            UpdatePackages(localRepository, sharedPackageRepository, sourceRepository, constraintProvider, pathResolver, project);
             project.Save();
         }
 
-        private string GetReposioryPath(string projectRoot)
+        private string GetRepositoryPath(string projectRoot)
         {
             string packagesDir = RepositoryPath;
 
             if (String.IsNullOrEmpty(packagesDir))
             {
-                // Try to resolve the packages directory from the project
-                string projectDir = Path.GetDirectoryName(projectRoot);
-                string solutionDir = ProjectHelper.GetSolutionDir(projectDir);
+                packagesDir = DefaultSettings.GetRepositoryPath();
+                if (String.IsNullOrEmpty(packagesDir))
+                {
+                    // Try to resolve the packages directory from the project
+                    string projectDir = Path.GetDirectoryName(projectRoot);
+                    string solutionDir = ProjectHelper.GetSolutionDir(projectDir);
 
-                return GetRepositoryPathFromSolution(solutionDir);
+                    return GetRepositoryPathFromSolution(solutionDir);
+                }
             }
 
             return GetPackagesDir(packagesDir);
@@ -234,7 +250,7 @@ namespace NuGet.Commands
             if (String.IsNullOrEmpty(packagesDir) &&
                 !String.IsNullOrEmpty(solutionDir))
             {
-                packagesDir = Path.Combine(solutionDir, PackagesFolder);
+                packagesDir = Path.Combine(solutionDir, CommandLineConstants.PackagesDirectoryName);
             }
 
             return GetPackagesDir(packagesDir);
@@ -274,6 +290,7 @@ namespace NuGet.Commands
         }
 
         internal void UpdatePackages(IPackageRepository localRepository,
+                                     ISharedPackageRepository sharedPackageRepository,
                                      IPackageRepository sourceRepository,
                                      IPackageConstraintProvider constraintProvider,
                                      IPackagePathResolver pathResolver,
@@ -284,6 +301,14 @@ namespace NuGet.Commands
                                      ConstraintProvider = constraintProvider
                                  };
 
+            // Fix for work item 2411: When updating packages, we did not add packages to the shared package repository. 
+            // Consequently, when querying the package reference repository, we would have package references with no backing package files in
+            // the shared repository. This would cause the reference repository to skip the package assuming that the entry is invalid.
+            projectManager.PackageReferenceAdded += (sender, eventArgs) =>
+            {
+                sharedPackageRepository.AddPackage(eventArgs.Package);
+            };
+            
             if (Verbose)
             {
                 projectManager.Logger = Console;

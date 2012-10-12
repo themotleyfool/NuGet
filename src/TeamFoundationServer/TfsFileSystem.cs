@@ -17,6 +17,11 @@ namespace NuGet.TeamFoundationServer
         public TfsFileSystem(ITfsWorkspace workspace, string path)
             : base(path)
         {
+            if (workspace == null)
+            {
+                throw new ArgumentNullException("workspace");
+            }
+
             Workspace = workspace;
         }
 
@@ -24,6 +29,11 @@ namespace NuGet.TeamFoundationServer
 
         public override void AddFile(string path, Stream stream)
         {
+            if (stream == null)
+            {
+                throw new ArgumentNullException("stream");
+            }
+
             string fullPath = GetFullPath(path);
 
             // See if there are any pending changes for this file
@@ -66,6 +76,11 @@ namespace NuGet.TeamFoundationServer
 
         public bool BindToSourceControl(IEnumerable<string> paths)
         {
+            if (paths == null)
+            {
+                throw new ArgumentNullException("paths");
+            }
+
             paths = paths.Select(GetFullPath);
             return Workspace.PendAdd(paths);
         }
@@ -89,6 +104,7 @@ namespace NuGet.TeamFoundationServer
             string fullPath = GetFullPath(path);
 
             var pendingChanges = Workspace.GetPendingChanges(fullPath);
+
             // If there are any pending deletes then do nothing
             if (pendingChanges.Any(c => c.IsDelete))
             {
@@ -108,8 +124,19 @@ namespace NuGet.TeamFoundationServer
 
         public void BeginProcessing(IEnumerable<string> batch, PackageAction action)
         {
+            if (batch == null)
+            {
+                throw new ArgumentNullException("batch");
+            }
+
             if (action == PackageAction.Install)
             {
+                if (!batch.Any())
+                {
+                    // Short-circuit if nothing specified
+                    return;
+                }
+
                 var batchSet = new HashSet<string>(batch.Select(GetFullPath), StringComparer.OrdinalIgnoreCase);
                 var batchFolders = batchSet.Select(Path.GetDirectoryName)
                                       .Distinct()

@@ -15,23 +15,20 @@ namespace NuGet.VisualStudio
         private readonly ISharedPackageRepository _sharedRepository;
         private readonly IDictionary<string, IProjectManager> _projects;
         private readonly ISolutionManager _solutionManager;
-        private readonly IRecentPackageRepository _recentPackagesRepository;
         private readonly IFileSystemProvider _fileSystemProvider;
         private readonly VsPackageInstallerEvents _packageEvents;
         private bool _bindingRedirectEnabled = true;
 
-        public VsPackageManager(ISolutionManager solutionManager, 
-                IPackageRepository sourceRepository, 
+        public VsPackageManager(ISolutionManager solutionManager,
+                IPackageRepository sourceRepository,
                 IFileSystemProvider fileSystemProvider,
-                IFileSystem fileSystem, 
-                ISharedPackageRepository sharedRepository, 
-                IRecentPackageRepository recentPackagesRepository, 
+                IFileSystem fileSystem,
+                ISharedPackageRepository sharedRepository,
                 VsPackageInstallerEvents packageEvents) :
             base(sourceRepository, new DefaultPackagePathResolver(fileSystem), fileSystem, sharedRepository)
         {
             _solutionManager = solutionManager;
             _sharedRepository = sharedRepository;
-            _recentPackagesRepository = recentPackagesRepository;
             _packageEvents = packageEvents;
             _fileSystemProvider = fileSystemProvider;
 
@@ -43,8 +40,6 @@ namespace NuGet.VisualStudio
             get { return _bindingRedirectEnabled; }
             set { _bindingRedirectEnabled = value; }
         }
-
-        internal bool AddToRecent { get; set; }
 
         internal void EnsureCached(Project project)
         {
@@ -124,11 +119,11 @@ namespace NuGet.VisualStudio
         }
 
         public virtual void InstallPackage(
-            IProjectManager projectManager, 
-            string packageId, 
-            SemanticVersion version, 
-            bool ignoreDependencies, 
-            bool allowPrereleaseVersions, 
+            IProjectManager projectManager,
+            string packageId,
+            SemanticVersion version,
+            bool ignoreDependencies,
+            bool allowPrereleaseVersions,
             ILogger logger)
         {
             InstallPackage(projectManager, packageId, version, ignoreDependencies, allowPrereleaseVersions,
@@ -136,12 +131,12 @@ namespace NuGet.VisualStudio
         }
 
         public void InstallPackage(
-            IProjectManager projectManager, 
-            string packageId, 
-            SemanticVersion version, 
-            bool ignoreDependencies, 
-            bool allowPrereleaseVersions, 
-            bool skipAssemblyReferences, 
+            IProjectManager projectManager,
+            string packageId,
+            SemanticVersion version,
+            bool ignoreDependencies,
+            bool allowPrereleaseVersions,
+            bool skipAssemblyReferences,
             ILogger logger)
         {
             InitializeLogger(logger, projectManager);
@@ -155,18 +150,15 @@ namespace NuGet.VisualStudio
             RunSolutionAction(() =>
             {
                 InstallPackage(
-                    package, 
-                    projectManager != null ? projectManager.Project.TargetFramework : null, 
-                    ignoreDependencies, 
+                    package,
+                    projectManager != null ? projectManager.Project.TargetFramework : null,
+                    ignoreDependencies,
                     allowPrereleaseVersions);
 
                 AddPackageReference(projectManager, package, ignoreDependencies, allowPrereleaseVersions);
 
                 AddSolutionPackageConfigEntry(package);
             });
-
-            // Add package to recent repository
-            AddPackageToRecentRepository(package);
         }
 
         public void InstallPackage(IProjectManager projectManager, IPackage package, IEnumerable<PackageOperation> operations, bool ignoreDependencies,
@@ -200,7 +192,7 @@ namespace NuGet.VisualStudio
             EventHandler<PackageOperationEventArgs> uninstallingHandler =
                 (sender, e) => _packageEvents.NotifyUninstalling(e);
 
-            EventHandler<PackageOperationEventArgs> uninstalledHandler = 
+            EventHandler<PackageOperationEventArgs> uninstalledHandler =
                 (sender, e) => _packageEvents.NotifyUninstalled(e);
 
             try
@@ -296,9 +288,6 @@ namespace NuGet.VisualStudio
                         // We might be updating a solution only package
                         UpdatePackage(newPackage, updateDependencies, allowPrereleaseVersions);
                     }
-
-                    // Add package to recent repository
-                    AddPackageToRecentRepository(newPackage);
                 }
                 else
                 {
@@ -380,6 +369,216 @@ namespace NuGet.VisualStudio
                           logger);
         }
 
+        // Reinstall all packages in all projects
+        public void ReinstallPackages(
+            bool updateDependencies,
+            bool allowPrereleaseVersions,
+            ILogger logger,
+            IPackageOperationEventListener eventListener)
+        {
+            UpdatePackages(
+                LocalRepository,
+                package => ReinstallPackage(
+                                package.Id,
+                                updateDependencies: updateDependencies,
+                                allowPrereleaseVersions: allowPrereleaseVersions,
+                                logger: logger,
+                                eventListener: eventListener),
+                logger);
+        }
+
+        // Reinstall all packages in the specified project
+        public void ReinstallPackages(
+            IProjectManager projectManager,
+            bool updateDependencies,
+            bool allowPrereleaseVersions,
+            ILogger logger)
+        {
+            UpdatePackages(
+                projectManager.LocalRepository,
+                package => ReinstallPackageInProject(projectManager, package, updateDependencies, allowPrereleaseVersions, logger),
+                logger);
+        }
+
+        /// <summary>
+        /// Reinstall the specified package in all projects.
+        /// </summary>
+        public void ReinstallPackage(
+            string packageId,
+            bool updateDependencies,
+            bool allowPrereleaseVersions,
+            ILogger logger,
+            IPackageOperationEventListener eventListener)
+        {
+            bool appliesToProject;
+            IPackage package = FindLocalPackage(packageId, out appliesToProject);
+
+            if (appliesToProject)
+            {
+                ReinstallPackageToAllProjects(packageId, updateDependencies, allowPrereleaseVersions, logger, eventListener);
+            }
+            else
+            {
+                ReinstallSolutionPackage(package, updateDependencies, allowPrereleaseVersions, logger);
+            }
+        }
+
+        /// <summary>
+        /// Reinstall the specified package in the specified project.
+        /// </summary>
+        public void ReinstallPackage(
+            IProjectManager projectManager,
+            string packageId,
+            bool updateDependencies,
+            bool allowPrereleaseVersions,
+            ILogger logger)
+        {
+            bool appliesToProject;
+            IPackage package = FindLocalPackageForUpdate(projectManager, packageId, out appliesToProject);
+
+            if (appliesToProject)
+            {
+                ReinstallPackageInProject(projectManager, package, updateDependencies, allowPrereleaseVersions, logger);
+            }
+            else
+            {
+                ReinstallSolutionPackage(package, updateDependencies, allowPrereleaseVersions, logger);
+            }
+        }
+
+        /// <summary>
+        /// Reinstall the specified package in the specified project, taking care of logging too.
+        /// </summary>
+        private void ReinstallPackageInProject(
+            IProjectManager projectManager,
+            IPackage package,
+            bool updateDependencies,
+            bool allowPrereleaseVersions,
+            ILogger logger)
+        {
+            logger = logger ?? NullLogger.Instance;
+
+            try
+            {
+                InitializeLogger(logger, projectManager);
+
+                logger.Log(MessageLevel.Info, VsResources.ReinstallProjectPackage, package, projectManager.Project.ProjectName);
+
+                RunSolutionAction(
+                    () =>
+                    {
+                        UninstallPackage(
+                            projectManager,
+                            package.Id,
+                            package.Version,
+                            forceRemove: true,
+                            removeDependencies: updateDependencies,
+                            logger: logger);
+
+                        InstallPackage(
+                            projectManager,
+                            package.Id,
+                            package.Version,
+                            ignoreDependencies: !updateDependencies,
+                            allowPrereleaseVersions: allowPrereleaseVersions,
+                            logger: logger);
+                    });
+            }
+            finally
+            {
+                ClearLogger(projectManager);
+            }
+        }
+
+        // Reinstall one package in all projects.
+        // We need to uninstall the package from all projects BEFORE
+        // reinstalling it back, so that the package will be refreshed from source repository.
+        private void ReinstallPackageToAllProjects(
+            string packageId,
+            bool updateDependencies,
+            bool allowPrereleaseVersions,
+            ILogger logger,
+            IPackageOperationEventListener eventListener)
+        {
+            logger = logger ?? NullLogger.Instance;
+            eventListener = eventListener ?? NullPackageOperationEventListener.Instance;
+
+            var projectsHasPackage = new Dictionary<Project, SemanticVersion>();
+
+            // first uninstall from all projects that has the package installed
+            RunActionOnProjects(
+                _solutionManager.GetProjects(),
+                project =>
+                {
+                    var projectManager = GetProjectManager(project);
+
+                    // find the package version installed in this project
+                    var projectPackage = projectManager.LocalRepository.FindPackage(packageId);
+                    if (projectPackage != null)
+                    {
+                        // save the version installed in this project so that we can restore the correct version later
+                        projectsHasPackage.Add(project, projectPackage.Version);
+
+                        UninstallPackage(
+                            projectManager,
+                            packageId,
+                            version: null,
+                            forceRemove: true,
+                            removeDependencies: updateDependencies,
+                            logger: logger);
+                    }
+                },
+                logger,
+                eventListener);
+
+            // now reinstall back to all the affected projects
+            RunActionOnProjects(
+               projectsHasPackage.Keys,
+               project =>
+               {
+                   var projectManager = GetProjectManager(project);
+                   if (!projectManager.LocalRepository.Exists(packageId))
+                   {
+                       InstallPackage(
+                           projectManager,
+                           packageId,
+                           version: projectsHasPackage[project],
+                           ignoreDependencies: !updateDependencies,
+                           allowPrereleaseVersions: allowPrereleaseVersions,
+                           logger: logger);
+                   }
+               },
+               logger,
+               eventListener);
+        }
+
+        private void ReinstallSolutionPackage(
+            IPackage package,
+            bool updateDependencies,
+            bool allowPrereleaseVersions,
+            ILogger logger)
+        {
+            logger = logger ?? NullLogger.Instance;
+
+            try
+            {
+                InitializeLogger(logger);
+
+                logger.Log(MessageLevel.Info, VsResources.ReinstallSolutionPackage, package);
+
+                RunSolutionAction(
+                    () =>
+                    {
+                        UninstallPackage(package, forceRemove: true, removeDependencies: !updateDependencies);
+                        InstallPackage(package, ignoreDependencies: !updateDependencies, allowPrereleaseVersions: allowPrereleaseVersions);
+                    });
+            }
+            finally
+            {
+                ClearLogger();
+            }
+        }
+
         protected override void ExecuteUninstall(IPackage package)
         {
             // Check if the package is in use before removing it
@@ -387,13 +586,6 @@ namespace NuGet.VisualStudio
             {
                 base.ExecuteUninstall(package);
             }
-        }
-
-        protected override void OnInstalled(PackageOperationEventArgs e)
-        {
-            base.OnInstalled(e);
-
-            AddPackageToRecentRepository(e.Package, updateOnly: true);
         }
 
         private IPackage FindLocalPackageForUpdate(IProjectManager projectManager, string packageId, out bool appliesToProject)
@@ -678,9 +870,6 @@ namespace NuGet.VisualStudio
 
                     AddSolutionPackageConfigEntry(package);
                 });
-
-                // Add package to recent repository
-                AddPackageToRecentRepository(package);
             }
             finally
             {
@@ -724,28 +913,7 @@ namespace NuGet.VisualStudio
             }
         }
 
-        private void AddPackageToRecentRepository(IPackage package, bool updateOnly = false)
-        {
-            if (!AddToRecent)
-            {
-                return;
-            }
-
-            // add the installed package to the recent repository
-            if (_recentPackagesRepository != null)
-            {
-                if (updateOnly)
-                {
-                    _recentPackagesRepository.UpdatePackage(package);
-                }
-                else
-                {
-                    _recentPackagesRepository.AddPackage(package);
-                }
-            }
-        }
-
-        private void InitializeLogger(ILogger logger, IProjectManager projectManager)
+        private void InitializeLogger(ILogger logger, IProjectManager projectManager = null)
         {
             // Setup logging on all of our objects
             Logger = logger;
@@ -758,7 +926,7 @@ namespace NuGet.VisualStudio
             }
         }
 
-        private void ClearLogger(IProjectManager projectManager)
+        private void ClearLogger(IProjectManager projectManager = null)
         {
             // clear logging on all of our objects
             Logger = null;
@@ -770,6 +938,7 @@ namespace NuGet.VisualStudio
                 projectManager.Project.Logger = null;
             }
         }
+
         /// <summary>
         /// Runs the specified action and rolls back any installed packages if on failure.
         /// </summary>
@@ -817,6 +986,34 @@ namespace NuGet.VisualStudio
                 // Remove the event handler
                 PackageInstalling -= installHandler;
                 PackageInstalled -= installedHandler;
+            }
+        }
+
+        /// <summary>
+        /// Runs the action on projects and log any error that may occur.
+        /// </summary>
+        private void RunActionOnProjects(
+            IEnumerable<Project> projects,
+            Action<Project> action,
+            ILogger logger,
+            IPackageOperationEventListener eventListener)
+        {
+            foreach (var project in projects)
+            {
+                try
+                {
+                    eventListener.OnBeforeAddPackageReference(project);
+                    action(project);
+                }
+                catch (Exception exception)
+                {
+                    logger.Log(MessageLevel.Error, ExceptionUtility.Unwrap(exception).Message);
+                    eventListener.OnAddPackageReferenceError(project, exception);
+                }
+                finally
+                {
+                    eventListener.OnAfterAddPackageReference(project);
+                }
             }
         }
 
@@ -961,8 +1158,6 @@ namespace NuGet.VisualStudio
             {
                 eventListener = eventListener ?? NullPackageOperationEventListener.Instance;
 
-                IPackage newPackage = null;
-
                 foreach (var project in _solutionManager.GetProjects())
                 {
                     IProjectManager projectManager = GetProjectManager(project);
@@ -976,12 +1171,6 @@ namespace NuGet.VisualStudio
                             try
                             {
                                 RunSolutionAction(() => projectAction(projectManager));
-
-                                if (newPackage == null)
-                                {
-                                    // after the update, get the new version to add to the recent package repository
-                                    newPackage = projectManager.LocalRepository.FindPackage(packageId);
-                                }
                             }
                             catch (Exception e)
                             {
@@ -998,11 +1187,6 @@ namespace NuGet.VisualStudio
                     {
                         ClearLogger(projectManager);
                     }
-                }
-
-                if (newPackage != null)
-                {
-                    AddPackageToRecentRepository(newPackage);
                 }
             }
             else
@@ -1023,9 +1207,6 @@ namespace NuGet.VisualStudio
                     {
                         ClearLogger(projectManager: null);
                     }
-
-                    // Add package to recent repository
-                    AddPackageToRecentRepository(newPackage);
                 }
                 else
                 {

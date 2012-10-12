@@ -288,6 +288,11 @@ namespace NuGet
             }
         }
 
+        public virtual IEnumerable<FrameworkName> GetSupportedFrameworks()
+        {
+            return Package.GetSupportedFrameworks();
+        }
+
         public IEnumerable<IPackageFile> GetFiles()
         {
             return Package.GetFiles();

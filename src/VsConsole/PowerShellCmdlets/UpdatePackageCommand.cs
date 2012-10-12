@@ -45,6 +45,7 @@ namespace NuGet.PowerShell.Commands
         // want it to be mandatory here.
         [Parameter(Mandatory = true, ValueFromPipelineByPropertyName = true, Position = 0, ParameterSetName = "Project")]
         [Parameter(ValueFromPipelineByPropertyName = true, Position = 0, ParameterSetName = "All")]
+        [Parameter(ValueFromPipelineByPropertyName = true, Position = 0, ParameterSetName = "Reinstall")]
         public override string Id
         {
             get
@@ -59,6 +60,7 @@ namespace NuGet.PowerShell.Commands
 
         [Parameter(Position = 1, ValueFromPipelineByPropertyName = true, ParameterSetName = "All")]
         [Parameter(Position = 1, ValueFromPipelineByPropertyName = true, ParameterSetName = "Project")]
+        [Parameter(Position = 1, ValueFromPipelineByPropertyName = true, ParameterSetName = "Reinstall")]
         public override string ProjectName
         {
             get
@@ -88,6 +90,10 @@ namespace NuGet.PowerShell.Commands
         [Parameter]
         public SwitchParameter Minor { get; set; }
 
+        [Parameter(Mandatory = true, ParameterSetName = "Reinstall")]
+        [Parameter(ParameterSetName = "All")]
+        public SwitchParameter Reinstall { get; set; }
+
         [Parameter, Alias("Prerelease")]
         public SwitchParameter IncludePrerelease { get; set; }
 
@@ -109,63 +115,106 @@ namespace NuGet.PowerShell.Commands
                 ErrorHandler.ThrowSolutionNotOpenTerminatingError();
             }
 
-            if (PackageManager == null) return;
-
-            SubscribeToProgressEvents();
+            if (PackageManager != null)
+            {
+                return;
+            }
 
             try
             {
-                IProjectManager projectManager = ProjectManager;
-                using (StartOperation(RepositoryOperationNames.Update))
+                SubscribeToProgressEvents();
+                if (Reinstall)
                 {
-                    if (!String.IsNullOrEmpty(Id))
-                    {
-                        // If a package id was specified, but no project was specified, then update this package in all projects
-                        if (String.IsNullOrEmpty(ProjectName))
-                        {
-                            if (Version != null)
-                            {
-                                PackageManager.UpdatePackageToSpecificVersion(Id, Version, !IgnoreDependencies.IsPresent,
-                                                                              IncludePrerelease, this, this);
-                            }
-                            else
-                            {
-                                PackageManager.UpdatePackage(Id, UpdateMode, !IgnoreDependencies.IsPresent,
-                                                             IncludePrerelease, this, this);
-                            }
-                        }
-                        else if (projectManager != null)
-                        {
-                            // If there was a project specified, then update the package in that project
-                            if (Version != null)
-                            {
-                                PackageManager.UpdatePackageToSpecificVersion(projectManager, Id, Version,
-                                                                              !IgnoreDependencies, IncludePrerelease, this);
-                            }
-                            else
-                            {
-                                PackageManager.UpdatePackage(projectManager, Id, UpdateMode, !IgnoreDependencies,
-                                                             IncludePrerelease, this);
-                            }
-                        }
-                    }
-                    else
-                    {
-                        if (String.IsNullOrEmpty(ProjectName))
-                        {
-                            PackageManager.UpdatePackages(UpdateMode, !IgnoreDependencies.IsPresent, IncludePrerelease, this, this);
-                        }
-                        else if (projectManager != null)
-                        {
-                            PackageManager.UpdatePackages(projectManager, UpdateMode, !IgnoreDependencies.IsPresent, IncludePrerelease, this);
-                        }
-                    }
+                    PerformReinstalls(ProjectManager);
+                }
+                else
+                {
+                    PerformUpdates(ProjectManager);
                 }
                 _hasConnectedToHttpSource |= UriHelper.IsHttpSource(Source, _packageSourceProvider);
             }
             finally
             {
                 UnsubscribeFromProgressEvents();
+            }
+        }
+
+        private void PerformReinstalls(IProjectManager projectManager)
+        {
+            using (StartOperation(RepositoryOperationNames.Reinstall))
+            {
+                if (!String.IsNullOrEmpty(Id))
+                {
+                    // If a package id was specified, but no project was specified, then update this package in all projects
+                    if (String.IsNullOrEmpty(ProjectName))
+                    {
+                        PackageManager.ReinstallPackage(Id, !IgnoreDependencies, IncludePrerelease, this, this);
+                    }
+                    else if (projectManager != null)
+                    {
+                        PackageManager.ReinstallPackage(projectManager, Id, !IgnoreDependencies, IncludePrerelease, this);
+                    }
+                }
+                else
+                {
+                    if (String.IsNullOrEmpty(ProjectName))
+                    {
+                        PackageManager.ReinstallPackages(!IgnoreDependencies, IncludePrerelease, this, this);
+                    }
+                    else if (projectManager != null)
+                    {
+                        PackageManager.ReinstallPackages(projectManager, !IgnoreDependencies, IncludePrerelease, this);
+                    }
+                }
+            }
+        }
+
+        private void PerformUpdates(IProjectManager projectManager)
+        {
+            using (StartOperation(RepositoryOperationNames.Update))
+            {
+                if (!String.IsNullOrEmpty(Id))
+                {
+                    // If a package id was specified, but no project was specified, then update this package in all projects
+                    if (String.IsNullOrEmpty(ProjectName))
+                    {
+                        if (Version != null)
+                        {
+                            PackageManager.UpdatePackageToSpecificVersion(Id, Version, !IgnoreDependencies.IsPresent,
+                                                                            IncludePrerelease, this, this);
+                        }
+                        else
+                        {
+                            PackageManager.UpdatePackage(Id, UpdateMode, !IgnoreDependencies.IsPresent,
+                                                            IncludePrerelease, this, this);
+                        }
+                    }
+                    else if (projectManager != null)
+                    {
+                        // If there was a project specified, then update the package in that project
+                        if (Version != null)
+                        {
+                            PackageManager.UpdatePackageToSpecificVersion(projectManager, Id, Version,
+                                                                            !IgnoreDependencies, IncludePrerelease, this);
+                        }
+                        else
+                        {
+                            PackageManager.UpdatePackage(projectManager, Id, UpdateMode, !IgnoreDependencies,
+                                                            IncludePrerelease, this);
+                        }
+                    }
+                }
+                else
+                {
+                    if (String.IsNullOrEmpty(ProjectName))
+                    {
+                        PackageManager.UpdatePackages(UpdateMode, !IgnoreDependencies.IsPresent, IncludePrerelease, this, this);
+                    }
+                    else if (projectManager != null)
+                    {
+                        PackageManager.UpdatePackages(projectManager, UpdateMode, !IgnoreDependencies.IsPresent, IncludePrerelease, this);
+                    }
+                }
             }
         }
 

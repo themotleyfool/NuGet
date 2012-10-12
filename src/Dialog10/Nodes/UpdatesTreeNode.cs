@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Versioning;
@@ -23,12 +24,21 @@ namespace NuGet.Dialog.Providers
             _localRepository = localRepository;
         }
 
-        public override IQueryable<IPackage> GetPackages(bool allowPrereleaseVersions)
+        public override IQueryable<IPackage> GetPackages(string searchTerm, bool allowPrereleaseVersions)
         {
             // We need to call ToList() here so that we don't evaluate the enumerable twice
             // when trying to count it.
             IList<FrameworkName> solutionFrameworks = Provider.SupportedFrameworks.Select(s => new FrameworkName(s)).ToList();
-            return Repository.GetUpdates(_localRepository.GetPackages(), allowPrereleaseVersions, includeAllVersions: false, targetFramework: solutionFrameworks)
+
+            // The allow prerelease flag passed to this method indiciates if we are allowed to show prerelease packages as part of the updates and does not
+            // reflect the filtering of packages we are looking for updates to.
+            var packages = _localRepository.GetPackages();
+            if (!String.IsNullOrEmpty(searchTerm))
+            {
+                packages = packages.Find(searchTerm);
+            }
+
+            return Repository.GetUpdates(packages, allowPrereleaseVersions, includeAllVersions: false, targetFramework: solutionFrameworks)
                              .AsQueryable();
         }
 

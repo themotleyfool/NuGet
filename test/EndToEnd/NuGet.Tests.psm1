@@ -16,13 +16,25 @@ $testRepositoryPath = Join-Path $currentPath Packages
 
 $nugetRoot = Join-Path $currentPath "..\.."
 
-$toolsPath = "$nugetRoot\Tools"
+$generatePackagesExePath = Join-Path $currentPath "GenerateTestPackages.exe"
+if (-not (Test-Path $generatePackagesExePath)) 
+{
+    $toolsPath = "$nugetRoot\Tools"
+	$generatePackagesProject = Join-Path $toolsPath NuGet\GenerateTestPackages\GenerateTestPackages.csproj
+	$generatePackagesExePath = Join-Path $toolsPath NuGet\GenerateTestPackages\bin\Debug\GenerateTestPackages.exe
+}
 
-$generatePackagesProject = Join-Path $toolsPath NuGet\GenerateTestPackages\GenerateTestPackages.csproj
+$nugetExePath = Join-Path $currentPath "NuGet.exe"
 
-$generatePackagesExePath = Join-Path $toolsPath NuGet\GenerateTestPackages\bin\Debug\GenerateTestPackages.exe
+if (!(Test-Path $nugetExePath)) 
+{
+	$nugetExePath = "$nugetRoot\src\CommandLine\bin\Debug\NuGet.exe"
+}
 
-$nugetExePath = "$nugetRoot\src\CommandLine\bin\Debug\NuGet.exe"
+if (!(Test-Path $nugetExePath)) 
+{
+	$nugetExePath = "$nugetRoot\src\CommandLine\bin\Debug11\NuGet.exe"
+}
 
 $msbuildPath = Join-Path $env:windir Microsoft.NET\Framework\v4.0.30319\msbuild
 
@@ -56,7 +68,7 @@ function global:Run-Test {
         [bool]$LaunchResultsOnFailure=$true
     )
     
-    if(!(Test-Path $generatePackagesExePath)) {
+    if (!(Test-Path $generatePackagesExePath)) {
         & $msbuildPath $generatePackagesProject /v:quiet
     }
     

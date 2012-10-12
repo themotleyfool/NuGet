@@ -13,7 +13,8 @@ namespace NuGet
                 new MisplacedScriptFileRule(),
                 new MisplacedTransformFileRule(),
                 new MissingSummaryRule(),
-                new NonAssemblyInsideLibRule()
+                new InitScriptNotUnderTools(),
+                new WinRTNameIsObsoleteRule()
             }
         );
 

@@ -9,8 +9,7 @@
     <AssemblyName>NuGet.Core</AssemblyName>
     <CodeAnalysisRuleSet>..\..\NuGet.ruleset</CodeAnalysisRuleSet>
     <RunCodeAnalysis Condition="'$(EnableCodeAnalysis)'=='true'">true</RunCodeAnalysis>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <TargetFrameworkProfile>Client</TargetFrameworkProfile>
+    <TargetFrameworkProfile Condition=" '$(TargetFrameworkVersion)' == 'v4.0' ">Client</TargetFrameworkProfile>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="..\..\Common\CommonResources.resx">
@@ -43,12 +42,13 @@
     <Compile Include="Analysis\PackageIssue.cs" />
     <Compile Include="Analysis\DefaultPackageRuleSet.cs" />
     <Compile Include="Analysis\PackageIssueLevel.cs" />
+    <Compile Include="Analysis\Rules\InitScriptNotUnderTools.cs" />
     <Compile Include="Analysis\Rules\InvalidFrameworkFolderRule.cs" />
     <Compile Include="Analysis\Rules\MisplacedAssemblyRule.cs" />
     <Compile Include="Analysis\Rules\MisplacedScriptFileRule.cs" />
     <Compile Include="Analysis\Rules\MisplacedTransformFileRule.cs" />
     <Compile Include="Analysis\Rules\MissingSummaryRule.cs" />
-    <Compile Include="Analysis\Rules\NonAssemblyInsideLibRule.cs" />
+    <Compile Include="Analysis\Rules\WinRTNameIsObsoleteRule.cs" />
     <Compile Include="Authoring\AssemblyMetadata.cs" />
     <Compile Include="Authoring\AssemblyMetadataExtractor.cs" />
     <Compile Include="Authoring\EmptyFrameworkFolderFile.cs" />
@@ -90,7 +90,11 @@
     <Compile Include="Http\RepositoryOperationNames.cs" />
     <Compile Include="Http\RequestHelper.cs" />
     <Compile Include="Http\STSAuthHelper.cs" />
+    <Compile Include="Http\WIFTypeProvider.cs" />
     <Compile Include="IEnvironmentVariableReader.cs" />
+    <Compile Include="NETPortable\NetPortableProfile.cs" />
+    <Compile Include="NETPortable\NetPortableProfileCollection.cs" />
+    <Compile Include="NETPortable\NetPortableProfileTable.cs" />
     <Compile Include="PackageRestoreConsent.cs" />
     <Compile Include="Packages\LocalPackage.cs" />
     <Compile Include="Packages\UnzippedPackage.cs" />
@@ -175,6 +179,7 @@
     <Compile Include="FileModifiers\Preprocessor.cs" />
     <Compile Include="FileModifiers\XmlTransfomer.cs" />
     <Compile Include="Http\IHttpClient.cs" />
+    <Compile Include="Utility\FrameworkNameEqualityComparer.cs" />
     <Compile Include="Utility\IProgressProvider.cs" />
     <Compile Include="Utility\IVersionSpec.cs" />
     <Compile Include="Utility\MemoryCache.cs" />
@@ -185,6 +190,7 @@
     <Compile Include="Utility\PathValidator.cs" />
     <Compile Include="Http\RedirectedHttpClient.cs" />
     <Compile Include="Utility\ProjectManagerExtensions.cs" />
+    <Compile Include="Utility\ReadOnlyHashSet.cs" />
     <Compile Include="Utility\VersionSpec.cs" />
     <Compile Include="Utility\WebRequestEventArgs.cs" />
     <Reference Include="System" />

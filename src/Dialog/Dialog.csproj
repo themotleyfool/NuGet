@@ -7,32 +7,34 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>NuGet.Dialog</RootNamespace>
     <AssemblyName>NuGet.Dialog</AssemblyName>
-    <RunCodeAnalysis Condition="'$(EnableCodeAnalysis)'=='true'">true</RunCodeAnalysis>
     <CodeAnalysisRuleSet>..\..\NuGet.ruleset</CodeAnalysisRuleSet>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="Microsoft.VisualStudio.ExtensionsExplorer, Version=11.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+      <SpecificVersion>True</SpecificVersion>
       <HintPath>..\..\lib\Microsoft.VisualStudio.ExtensionsExplorer.dll</HintPath>
       <Private>False</Private>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.ExtensionsExplorer.UI, Version=11.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
+      <SpecificVersion>True</SpecificVersion>
       <HintPath>..\..\lib\Microsoft.VisualStudio.ExtensionsExplorer.UI.dll</HintPath>
       <Private>False</Private>
     </Reference>
-    <Reference Include="Microsoft.VisualStudio.Shell.Interop" />
-    <Reference Include="Microsoft.VisualStudio.Shell.10.0">
-      <Private>false</Private>
+    <Reference Include="Microsoft.VisualStudio.Shell.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <SpecificVersion>True</SpecificVersion>
+      <HintPath>..\..\lib\VS10\Microsoft.VisualStudio.Shell.10.0.dll</HintPath>
+      <Private>False</Private>
     </Reference>
+    <Reference Include="Microsoft.VisualStudio.Shell.Interop, Version=7.1.40304.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
     <Reference Include="Microsoft.VisualStudio.Shell.Interop.10.0, Version=10.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <EmbedInteropTypes>False</EmbedInteropTypes>
     </Reference>
-    <Reference Include="Microsoft.VisualStudio.Shell.Interop.11.0">
-      <HintPath>..\..\lib\Microsoft.VisualStudio.Shell.Interop.11.0.dll</HintPath>
+    <Reference Include="Microsoft.VisualStudio.Shell.Interop.11.0, Version=11.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <SpecificVersion>True</SpecificVersion>
       <EmbedInteropTypes>False</EmbedInteropTypes>
       <Private>False</Private>
+      <HintPath>..\..\lib\Microsoft.VisualStudio.Shell.Interop.11.0.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.VisualStudio.Shell.Interop.8.0, Version=8.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a" />
     <Reference Include="PresentationCore" />
@@ -106,17 +108,14 @@
     <Compile Include="..\Dialog10\Providers\PackagesProviderBase.cs">
       <Link>Providers\PackagesProviderBase.cs</Link>
     </Compile>
-    <Compile Include="..\Dialog10\Providers\RecentProvider.cs">
-      <Link>Providers\RecentProvider.cs</Link>
+    <Compile Include="..\Dialog10\Providers\OnlineSearchProvider.cs">
+      <Link>Providers\SearchProvider.cs</Link>
     </Compile>
     <Compile Include="..\Dialog10\Providers\SolutionInstalledProvider.cs">
       <Link>Providers\SolutionInstalledProvider.cs</Link>
     </Compile>
     <Compile Include="..\Dialog10\Providers\SolutionOnlineProvider.cs">
       <Link>Providers\SolutionOnlineProvider.cs</Link>
-    </Compile>
-    <Compile Include="..\Dialog10\Providers\SolutionRecentProvider.cs">
-      <Link>Providers\SolutionRecentProvider.cs</Link>
     </Compile>
     <Compile Include="..\Dialog10\Providers\SolutionUpdatesProvider.cs">
       <Link>Providers\SolutionUpdatesProvider.cs</Link>

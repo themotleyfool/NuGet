@@ -19,6 +19,7 @@ namespace NuGet.Commands
         private readonly Project _project;
         private FrameworkName _frameworkName;
         private ILogger _logger;
+        private ISettings _settings;
 
         // Files we want to always exclude from the resulting package
         private static readonly HashSet<string> _excludeFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
@@ -52,6 +53,19 @@ namespace NuGet.Commands
             _project = project;
             Properties = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             AddSolutionDir();
+            _settings = null;            
+        }
+
+        private ISettings DefaultSettings
+        {
+            get
+            {
+                if (null == _settings)
+                {
+                    _settings = Settings.LoadDefaultSettings(new PhysicalFileSystem(_project.DirectoryPath));
+                }
+                return _settings;
+            }
         }
 
         private string TargetPath
@@ -119,27 +133,7 @@ namespace NuGet.Commands
                 ExtractMetadataFromProject(builder);
             }
 
-            // Set the properties that were resolved from the assembly/project so they can be 
-            // resolved by name if the nuspec contains tokens
-            _properties.Clear();
-            _properties.Add("Id", builder.Id);
-            _properties.Add("Version", builder.Version.ToString());
-
-            if (!String.IsNullOrEmpty(builder.Title))
-            {
-                _properties.Add("Title", builder.Title);
-            }
-
-            if (!String.IsNullOrEmpty(builder.Description))
-            {
-                _properties.Add("Description", builder.Description);
-            }
-
-            string projectAuthor = builder.Authors.FirstOrDefault();
-            if (!String.IsNullOrEmpty(projectAuthor))
-            {
-                _properties.Add("Author", projectAuthor);
-            }
+            var projectAuthor = InitializeProperties(builder);
 
             // If the package contains a nuspec file then use it for metadata
             Manifest manifest = ProcessNuspec(builder, basePath);
@@ -182,6 +176,37 @@ namespace NuGet.Commands
             }
 
             return builder;
+        }
+
+        internal string InitializeProperties(IPackageMetadata metadata)
+        {
+            // Set the properties that were resolved from the assembly/project so they can be
+            // resolved by name if the nuspec contains tokens
+            _properties.Clear();
+            _properties.Add("Id", metadata.Id);
+            _properties.Add("Version", metadata.Version.ToString());
+
+            if (!String.IsNullOrEmpty(metadata.Title))
+            {
+                _properties.Add("Title", metadata.Title);
+            }
+
+            if (!String.IsNullOrEmpty(metadata.Description))
+            {
+                _properties.Add("Description", metadata.Description);
+            }
+
+            if (!String.IsNullOrEmpty(metadata.Copyright))
+            {
+                _properties.Add("Copyright", metadata.Copyright);
+            }
+
+            string projectAuthor = metadata.Authors.FirstOrDefault();
+            if (!String.IsNullOrEmpty(projectAuthor))
+            {
+                _properties.Add("Author", projectAuthor);
+            }
+            return projectAuthor;
         }
 
         dynamic IPropertyProvider.GetPropertyValue(string propertyName)
@@ -488,16 +513,34 @@ namespace NuGet.Commands
         private IPackageRepository GetPackagesRepository()
         {
             string solutionDir = GetSolutionDir();
-            if (String.IsNullOrEmpty(solutionDir))
+            string defaultValue = DefaultSettings.GetRepositoryPath();
+
+            string target = null;
+            if (!String.IsNullOrEmpty(solutionDir))
             {
-                return null;
+                string configValue = GetPackagesPath(solutionDir);
+                // solution dir exists, no default packages folder specified anywhere,
+                // default to hardcoded "packages" folder under solution
+                if (string.IsNullOrEmpty(configValue) && string.IsNullOrEmpty(defaultValue))
+                {
+                    configValue = PackagesFolder;
+                }
+
+                if (!string.IsNullOrEmpty(configValue))
+                {
+                    target = Path.Combine(solutionDir, configValue);
+                }
             }
 
-            string target = Path.Combine(solutionDir, GetPackagesPath(solutionDir));
-            if (Directory.Exists(target))
+            if (string.IsNullOrEmpty(target))
             {
-                return new LocalPackageRepository(target);
-            }
+                target = defaultValue;
+            }            
+
+            if (!string.IsNullOrEmpty(target) && Directory.Exists(target))
+            {
+                return new SharedPackageRepository(target);
+            }            
 
             return null;
         }
@@ -527,7 +570,7 @@ namespace NuGet.Commands
             {
             }
 
-            return PackagesFolder;
+            return null;
         }
 
         private Manifest ProcessNuspec(PackageBuilder builder, string basePath)
@@ -596,6 +639,7 @@ namespace NuGet.Commands
             {
                 var references = new PackageReferenceFile(packagesConfig).GetPackageReferences();
                 contentFilesInDependencies = references.Select(reference => repository.FindPackage(reference.Id, reference.Version))
+                                                       .Where(a => a != null)
                                                        .SelectMany(a => a.GetContentFiles())
                                                        .ToList();
             }
@@ -627,7 +671,7 @@ namespace NuGet.Commands
                     using (var dependencyFileStream = targetFile.GetStream())
                     using (var fileContentsStream = File.Open(fullPath, FileMode.Open))
                     {
-                        var isEqual = FileHelper.AreFilesEqual(dependencyFileStream, fileContentsStream);
+                        var isEqual = StreamExtensions.ContentEquals(dependencyFileStream, fileContentsStream);
                         if (isEqual)
                         {
                             Logger.Log(MessageLevel.Info, NuGetResources.PackageCommandFileFromDependencyIsNotChanged, targetFilePath);

@@ -66,8 +66,25 @@ namespace NuGet
                 }
                 else
                 {
+                    SetConsoleInteractivity(console, command as Command);
                     command.Execute();
                 }
+            }
+            catch (AggregateException exception)
+            {
+                string message;
+                Exception unwrappedEx = ExceptionUtility.Unwrap(exception);
+                if (unwrappedEx == exception)
+                {
+                    // If the AggregateException contains more than one InnerException, it cannot be unwrapped. In which case, simply print out individual error messages
+                    message = String.Join(Environment.NewLine, exception.InnerExceptions.Select(ex => ex.Message).Distinct(StringComparer.CurrentCulture));
+                }
+                else
+                {
+                    message = ExceptionUtility.Unwrap(exception).Message;
+                }
+                console.WriteError(message);
+                return 1;
             }
             catch (Exception e)
             {
@@ -83,11 +100,11 @@ namespace NuGet
             {
                 if (!IgnoreExtensions)
                 {
-                    AddExtensionsToCatalog(catalog);
+                    AddExtensionsToCatalog(catalog, console);
                 }
                 using (var container = new CompositionContainer(catalog))
                 {
-                    var settings = GetCommandLineSettings(fileSystem);
+                    var settings = Settings.LoadDefaultSettings(fileSystem);
                     var defaultPackageSource = new PackageSource(NuGetConstants.DefaultFeedUrl);
 
                     var officialPackageSource = new PackageSource(NuGetConstants.DefaultFeedUrl, NuGetResources.OfficialPackageSourceName);
@@ -105,7 +122,7 @@ namespace NuGet
 
                     // Register an additional provider for the console specific application so that the user
                     // will be prompted if a proxy is set and credentials are required
-                    var credentialProvider = new SettingsCredentialProvider(new ConsoleCredentialProvider(), packageSourceProvider, console);
+                    var credentialProvider = new SettingsCredentialProvider(new ConsoleCredentialProvider(console), packageSourceProvider, console);
                     HttpClient.DefaultCredentialProvider = credentialProvider;
 
                     container.ComposeExportedValue<IConsole>(console);
@@ -113,6 +130,7 @@ namespace NuGet
                     container.ComposeExportedValue<IPackageRepositoryFactory>(new NuGet.Common.CommandLineRepositoryFactory());
                     container.ComposeExportedValue<IPackageSourceProvider>(packageSourceProvider);
                     container.ComposeExportedValue<ICredentialProvider>(credentialProvider);
+                    container.ComposeExportedValue<IFileSystem>(fileSystem);
                     container.ComposeParts(this);
                 }
             }
@@ -142,7 +160,7 @@ namespace NuGet
                    command.Arguments.Count <= attribute.MaxArgs;
         }
 
-        private static void AddExtensionsToCatalog(AggregateCatalog catalog)
+        private static void AddExtensionsToCatalog(AggregateCatalog catalog, IConsole console)
         {
             IEnumerable<string> directories = new[] { ExtensionsDirectoryRoot };
 
@@ -153,17 +171,25 @@ namespace NuGet
                 directories = directories.Concat(customExtensions.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries));
             }
 
+            IEnumerable<string> files;
             foreach (var directory in directories)
             {
                 if (Directory.Exists(directory))
                 {
-                    var files = Directory.EnumerateFiles(directory, "*.dll", SearchOption.AllDirectories);
-                    RegisterExtensions(catalog, files);
+                    files = Directory.EnumerateFiles(directory, "*.dll", SearchOption.AllDirectories);
+                    RegisterExtensions(catalog, files, console);
                 }
             }
+
+            // Ideally we want to look for all files. However, using MEF to identify imports results in assemblies being loaded and locked by our App Domain
+            // which could be slow, might affect people's build systems and among other things breaks our build. 
+            // Consequently, we'll use a convention - only binaries ending in the name Extensions would be loaded. 
+            var nugetDirectory = Path.GetDirectoryName(typeof(Program).Assembly.Location);
+            files = Directory.EnumerateFiles(nugetDirectory, "*Extensions.dll");
+            RegisterExtensions(catalog, files, console);
         }
 
-        private static void RegisterExtensions(AggregateCatalog catalog, IEnumerable<string> enumerateFiles)
+        private static void RegisterExtensions(AggregateCatalog catalog, IEnumerable<string> enumerateFiles, IConsole console)
         {
             foreach (var item in enumerateFiles)
             {
@@ -171,20 +197,38 @@ namespace NuGet
                 {
                     catalog.Catalogs.Add(new AssemblyCatalog(item));
                 }
-                catch (BadImageFormatException)
+                catch (BadImageFormatException ex)
                 {
                     // Ignore if the dll wasn't a valid assembly
+                    console.WriteWarning(ex.Message);
+                }
+                catch (FileLoadException ex)
+                {
+                    // Ignore if we couldn't load the assembly.
+                    console.WriteWarning(ex.Message);
                 }
             }
         }
 
-        internal static ISettings GetCommandLineSettings(IFileSystem workingDirectory)
+        private static void SetConsoleInteractivity(IConsole console, Command command)
         {
-            if (workingDirectory.FileExists(Constants.SettingsFileName))
+            // Global environment variable to prevent the exe for prompting for credentials
+            string globalSwitch = Environment.GetEnvironmentVariable("NUGET_EXE_NO_PROMPT");
+
+            // When running from inside VS, no input is available to our executable locking up VS.
+            // VS sets up a couple of environment variables one of which is named VisualStudioVersion. 
+            // Every time this is setup, we will just fail.
+            // TODO: Remove this in next iteration. This is meant for short-term backwards compat.
+            string vsSwitch = Environment.GetEnvironmentVariable("VisualStudioVersion");
+
+            console.IsNonInteractive = !String.IsNullOrEmpty(globalSwitch) ||
+                                       !String.IsNullOrEmpty(vsSwitch) ||
+                                       (command != null && command.NonInteractive);
+
+            if (command != null)
             {
-                return new Settings(workingDirectory);
+                console.Verbosity = command.Verbosity;
             }
-            return Settings.LoadDefaultSettings();
         }
     }
 }

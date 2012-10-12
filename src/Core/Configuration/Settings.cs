@@ -13,45 +13,92 @@ namespace NuGet
     {
         private readonly XDocument _config;
         private readonly IFileSystem _fileSystem;
+        private readonly string _fileName;
+        // next config file to read if any
+        private Settings _next;
 
         public Settings(IFileSystem fileSystem)
+            : this(fileSystem, Constants.SettingsFileName)
+        {
+        }
+
+        public Settings(IFileSystem fileSystem, string fileName)
         {
             if (fileSystem == null)
             {
                 throw new ArgumentNullException("fileSystem");
             }
+            if (String.IsNullOrEmpty(fileName))
+            {
+                throw new ArgumentException(CommonResources.Argument_Cannot_Be_Null_Or_Empty, "fileName");
+            }
             _fileSystem = fileSystem;
-            _config = XmlUtility.GetOrCreateDocument("configuration", _fileSystem, Constants.SettingsFileName);
+            _fileName = fileName;
+            _config = XmlUtility.GetOrCreateDocument("configuration", _fileSystem, _fileName);
         }
 
         public string ConfigFilePath
         {
-            get { return Path.Combine(_fileSystem.Root, Constants.SettingsFileName); }
+            get
+            {
+                return Path.IsPathRooted(_fileName) ?
+                            _fileName : Path.GetFullPath(Path.Combine(_fileSystem.Root, _fileName));
+            }
         }
 
-        public static ISettings LoadDefaultSettings()
+        public static ISettings LoadDefaultSettings(IFileSystem fileSystem)
         {
+            // Walk up the tree to find a config file; also look in .nuget subdirectories
+            // Finally look in %APPDATA%\NuGet
+            var validSettingFiles = new List<Settings>();
+            if (fileSystem != null)
+            {
+                validSettingFiles.AddRange(
+                    GetSettingsFileNames(fileSystem)
+                        .Select(f => ReadSettings(fileSystem, f))
+                        .Where(f => f != null));
+            }
+
+            // for the default location, allow case where file does not exist, in which case it'll end
+            // up being created if needed
             string appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
             if (!String.IsNullOrEmpty(appDataPath))
             {
                 var defaultSettingsPath = Path.Combine(appDataPath, "NuGet");
-                var fileSystem = new PhysicalFileSystem(defaultSettingsPath);
-                try
+                var appDataSettings = ReadSettings(new PhysicalFileSystem(defaultSettingsPath),
+                                                   Constants.SettingsFileName);
+                if (appDataSettings != null)
                 {
-                    return new Settings(fileSystem);
-                }
-                catch (XmlException)
-                {
-                    // Work Item 1531: If the config file is malformed and the constructor throws, NuGet fails to load in VS. 
-                    // Returning a null instance prevents us from silently failing.
+                    validSettingFiles.Add(appDataSettings);
                 }
             }
 
-            // If there is no AppData folder, use a null file system to make the Settings object do nothing
-            return NullSettings.Instance;
+            if (validSettingFiles.IsEmpty())
+            {
+                // This means we've failed to load all config files and also failed to load or create the one in %AppData%
+                // Work Item 1531: If the config file is malformed and the constructor throws, NuGet fails to load in VS. 
+                // Returning a null instance prevents us from silently failing and also from picking up the wrong config
+                return NullSettings.Instance;
+            }
+
+            // if multiple setting files were loaded, chain them in a linked list
+            for (int i = 1; i < validSettingFiles.Count; ++i)
+            {
+                validSettingFiles[i]._next = validSettingFiles[i - 1];
+            }
+
+            // return the linked list head, typically %APPDATA%\NuGet\nuget.config
+            // This is the one we want to read first, and also the one that we want to write to
+            // TODO: add UI to allow specifying which one to write to
+            return validSettingFiles.Last();
         }
 
         public string GetValue(string section, string key)
+        {
+            return GetValue(section, key, isPath: false);
+        }
+
+        public string GetValue(string section, string key, bool isPath)
         {
             if (String.IsNullOrEmpty(section))
             {
@@ -63,22 +110,56 @@ namespace NuGet
                 throw new ArgumentException(CommonResources.Argument_Cannot_Be_Null_Or_Empty, "key");
             }
 
-            // Get the section and return null if it doesn't exist
-            var sectionElement = GetSection(_config.Root, section);
-            if (sectionElement == null)
+            XElement element = null;
+            string ret = null;
+
+            var curr = this;
+            while (curr != null)
             {
-                return null;
+                XElement newElement = curr.GetValueInternal(section, key, element);
+                if (!object.ReferenceEquals(element, newElement))
+                {
+                    element = newElement;
+
+                    // we need to evaluate using current Settings in case value needs path transformation
+                    ret = curr.ElementToValue(element, isPath);
+                }
+                curr = curr._next;
             }
-           
-            // Get the add element that matches the key and return null if it doesn't exist
-            var element = FindElementByKey(sectionElement, key);
+
+            return ret;
+        }
+
+        private string ElementToValue(XElement element, bool isPath)
+        {
             if (element == null)
             {
                 return null;
             }
 
             // Return the optional value which if not there will be null;
-            return element.GetOptionalAttributeValue("value");
+            string value = element.GetOptionalAttributeValue("value");
+            if (!isPath || String.IsNullOrEmpty(value))
+            {
+                return value;
+            }
+            // if value represents a path and relative to this file path was specified, 
+            // append location of file
+            string configDirectory = Path.GetDirectoryName(ConfigFilePath);
+            return _fileSystem.GetFullPath(Path.Combine(configDirectory, value));
+        }
+
+        private XElement GetValueInternal(string section, string key, XElement curr)
+        {
+            // Get the section and return curr if it doesn't exist
+            var sectionElement = GetSection(_config.Root, section);
+            if (sectionElement == null)
+            {
+                return curr;
+            }
+
+            // Get the add element that matches the key and return curr if it doesn't exist
+            return FindElementByKey(sectionElement, key, curr);
         }
 
         public IList<KeyValuePair<string, string>> GetValues(string section)
@@ -88,16 +169,24 @@ namespace NuGet
                 throw new ArgumentException(CommonResources.Argument_Cannot_Be_Null_Or_Empty, "section");
             }
 
-            var sectionElement = GetSection(_config.Root, section);
-            if (sectionElement == null)
+            var values = new List<KeyValuePair<string, string>>();
+            var curr = this;
+            while (curr != null)
             {
-                return EmptyList();
+                curr.PopulateValues(section, values);
+                curr = curr._next;
             }
 
-            return sectionElement.Elements("add")
-                                 .Select(ReadValue)
-                                 .ToList()
-                                 .AsReadOnly();
+            return values.AsReadOnly();
+        }
+
+        private void PopulateValues(string section, List<KeyValuePair<string, string>> current)
+        {
+            var sectionElement = GetSection(_config.Root, section);
+            if (sectionElement != null)
+            {
+                ReadSection(sectionElement, current);
+            }
         }
 
         public IList<KeyValuePair<string, string>> GetNestedValues(string section, string key)
@@ -112,21 +201,30 @@ namespace NuGet
                 throw new ArgumentException(CommonResources.Argument_Cannot_Be_Null_Or_Empty, "key");
             }
 
+            var values = new List<KeyValuePair<string, string>>();
+            var curr = this;
+            while (curr != null)
+            {
+                curr.PopulateNestedValues(section, key, values);
+                curr = curr._next;
+            }
+
+            return values.AsReadOnly();
+        }
+
+        private void PopulateNestedValues(string section, string key, List<KeyValuePair<string, string>> current)
+        {
             var sectionElement = GetSection(_config.Root, section);
             if (sectionElement == null)
             {
-                return EmptyList();
+                return;
             }
             var subSection = GetSection(sectionElement, key);
             if (subSection == null)
             {
-                return EmptyList();
+                return;
             }
-
-            return subSection.Elements("add")
-                             .Select(ReadValue)
-                             .ToList()
-                             .AsReadOnly();
+            ReadSection(subSection, current);
         }
 
         public void SetValue(string section, string key, string value)
@@ -191,7 +289,7 @@ namespace NuGet
                 throw new ArgumentNullException("value");
             }
 
-            var element = FindElementByKey(sectionElement, key);
+            var element = FindElementByKey(sectionElement, key, null);
             if (element != null)
             {
                 element.SetAttributeValue("value", value);
@@ -199,8 +297,8 @@ namespace NuGet
             }
             else
             {
-                sectionElement.Add(new XElement("add", 
-                                                    new XAttribute("key", key), 
+                sectionElement.Add(new XElement("add",
+                                                    new XAttribute("key", key),
                                                     new XAttribute("value", value)));
             }
         }
@@ -222,7 +320,7 @@ namespace NuGet
                 return false;
             }
 
-            var elementToDelete = FindElementByKey(sectionElement, key);
+            var elementToDelete = FindElementByKey(sectionElement, key, null);
             if (elementToDelete == null)
             {
                 return false;
@@ -250,9 +348,27 @@ namespace NuGet
             return true;
         }
 
+        private void ReadSection(XContainer sectionElement, ICollection<KeyValuePair<string, string>> values)
+        {
+            var elements = sectionElement.Elements();
+
+            foreach (var element in elements)
+            {
+                string elementName = element.Name.LocalName;
+                if (elementName.Equals("add", StringComparison.OrdinalIgnoreCase))
+                {
+                    values.Add(ReadValue(element));
+                }
+                else if (elementName.Equals("clear", StringComparison.OrdinalIgnoreCase))
+                {
+                    values.Clear();
+                }
+            }
+        }
+
         private void Save()
         {
-            _fileSystem.AddFile(Constants.SettingsFileName, _config.Save);
+            _fileSystem.AddFile(_fileName, _config.Save);
         }
 
         private KeyValuePair<string, string> ReadValue(XElement element)
@@ -286,15 +402,81 @@ namespace NuGet
             return section;
         }
 
-        private static XElement FindElementByKey(XElement sectionElement, string key)
+        private static XElement FindElementByKey(XElement sectionElement, string key, XElement curr)
         {
-            return sectionElement.Elements("add")
-                                        .FirstOrDefault(s => key.Equals(s.GetOptionalAttributeValue("key"), StringComparison.OrdinalIgnoreCase));
+            XElement result = curr;
+            foreach (var element in sectionElement.Elements())
+            {
+                string elementName = element.Name.LocalName;
+                if (elementName.Equals("clear", StringComparison.OrdinalIgnoreCase))
+                {
+                    result = null;
+                }
+                else if (elementName.Equals("add", StringComparison.OrdinalIgnoreCase) &&
+                         element.GetOptionalAttributeValue("key").Equals(key, StringComparison.OrdinalIgnoreCase))
+                {
+                    result = element;
+                }
+            }
+            return result;
+        }
+        
+        /// <remarks>
+        /// Order is most significant (e.g. applied last) to least significant (applied first)
+        /// ex:
+        /// c:\foo\nuget.config
+        /// c:\nuget.config
+        /// </remarksy>
+        private static IEnumerable<string> GetSettingsFileNames(IFileSystem fileSystem)
+        {
+            // for dirs obtained by walking up the tree, only consider setting files that already exist.
+            // otherwise we'd end up creating them.
+            foreach (var dir in GetSettingsFilePaths(fileSystem))
+            {
+                string fileName = Path.Combine(dir, Constants.SettingsFileName);
+
+                // This is to workaround limitations in the filesystem mock implementations that assume relative paths.
+                // For example MockFileSystem.Paths is holding relative paths, which whould be responsible for hundreds
+                // of failures should this code could go away
+                if (fileName.StartsWith(fileSystem.Root, StringComparison.OrdinalIgnoreCase))
+                {
+                    int count = fileSystem.Root.Length;
+                    // if fileSystem.Root ends with \ (ex: c:\foo\) then we've removed all we needed
+                    // otherwise, remove one more char
+                    if (!(fileSystem.Root.EndsWith("\\") || fileSystem.Root.EndsWith("/")))
+                    {
+                        count++;
+                    }
+                    fileName = fileName.Substring(count);
+                }
+
+                if (fileSystem.FileExists(fileName))
+                {
+                    yield return fileName;
+                }
+            }
         }
 
-        private static IList<KeyValuePair<string, string>> EmptyList()
+        private static IEnumerable<string> GetSettingsFilePaths(IFileSystem fileSystem)
         {
-            return new KeyValuePair<string, string>[0];
+            string root = fileSystem.Root;
+            while (root != null)
+            {
+                yield return root;
+                root = Path.GetDirectoryName(root);
+            }
+        }
+
+        private static Settings ReadSettings(IFileSystem fileSystem, string settingsPath)
+        {
+            try
+            {
+                return new Settings(fileSystem, settingsPath);
+            }
+            catch (XmlException)
+            {
+                return null;
+            }
         }
     }
 }

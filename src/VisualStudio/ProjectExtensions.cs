@@ -66,7 +66,7 @@ namespace NuGet.VisualStudio
 
             // 'cursor' can contain a reference to either a Project instance or ProjectItem instance. 
             // Both types have the ProjectItems property that we want to access.
-            dynamic cursor = project;
+            object cursor = project;
 
             string fullPath = project.GetFullPath();
             string folderRelativePath = String.Empty;
@@ -83,7 +83,7 @@ namespace NuGet.VisualStudio
                 }
             }
 
-            return cursor.ProjectItems;
+            return GetProjectItems(cursor);
         }
 
         public static ProjectItem GetProjectItem(this Project project, string path)
@@ -173,6 +173,19 @@ namespace NuGet.VisualStudio
             return projectItem != null;
         }
 
+        public static bool ContainsFile(this Project project, string name)
+        {
+            IVsProject vsProject = (IVsProject)project.ToVsHierarchy();
+            if (vsProject == null) 
+            {
+                return false;
+            }
+            int pFound;
+            uint itemId;
+            int hr = vsProject.IsDocumentInProject( name, out pFound, new VSDOCUMENTPRIORITY[0], out itemId);
+            return ErrorHandler.Succeeded(hr) && pFound == 1;
+        }
+
         /// <summary>
         /// // If we didn't find the project item at the top level, then we look one more level down.
         /// In VS files can have other nested files like foo.aspx and foo.aspx.cs or web.config and web.debug.config. 
@@ -219,23 +232,6 @@ namespace NuGet.VisualStudio
             var outputType = project.GetPropertyValue<prjOutputType>("OutputType");
             return project.GetProjectTypeGuids().Count() == 1 &&
                    outputType == prjOutputType.prjOutputTypeLibrary;
-        }
-
-        public static string GetName(this Project project)
-        {
-            string name = project.Name;
-            if (project.IsJavaScriptProject())
-            {
-                // The JavaScript project initially returns a "(loading..)" suffix to the project Name.
-                // Need to get rid of it for the rest of NuGet to work properly.
-                // TODO: Follow up with the VS team to see if this will be fixed eventually
-                const string suffix = " (loading...)";
-                if (name.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                {
-                    name = name.Substring(0, name.Length - suffix.Length);
-                }
-            }
-            return name;
         }
 
         public static bool IsJavaScriptProject(this Project project)
@@ -365,7 +361,7 @@ namespace NuGet.VisualStudio
         // 'parentItem' can be either a Project or ProjectItem
         private static ProjectItem GetOrCreateFolder(
             Project project,
-            dynamic parentItem,
+            object parentItem,
             string fullPath,
             string folderRelativePath,
             string folderName,
@@ -378,7 +374,7 @@ namespace NuGet.VisualStudio
 
             ProjectItem subFolder;
 
-            ProjectItems projectItems = parentItem.ProjectItems;
+            ProjectItems projectItems = GetProjectItems(parentItem);
             if (projectItems.TryGetFolder(folderName, out subFolder))
             {
                 // Get the sub folder
@@ -395,9 +391,9 @@ namespace NuGet.VisualStudio
                     if (succeeded)
                     {
                         // IMPORTANT: after including the folder into project, we need to get 
-                        // a new ProjectItems snapshot from the parent item. Otheriwse, reusing 
+                        // a new ProjectItems snapshot from the parent item. Otherwise, reusing 
                         // the old snapshot from above won't have access to the added folder.
-                        projectItems = parentItem.ProjectItems;
+                        projectItems = GetProjectItems(parentItem);
                         if (projectItems.TryGetFolder(folderName, out subFolder))
                         {
                             // Get the sub folder
@@ -417,6 +413,23 @@ namespace NuGet.VisualStudio
                     // to this impl
                     return projectItems.AddFolder(folderName);
                 }
+            }
+
+            return null;
+        }
+
+        private static ProjectItems GetProjectItems(object parent)
+        {
+            var project = parent as Project;
+            if (project != null)
+            {
+                return project.ProjectItems;
+            }
+
+            var projectItem = parent as ProjectItem;
+            if (projectItem != null)
+            {
+                return projectItem.ProjectItems;
             }
 
             return null;
@@ -546,6 +559,14 @@ namespace NuGet.VisualStudio
             }
 
             FrameworkName frameworkName = project.GetTargetFrameworkName();
+
+            // if the target framework cannot be determined the frameworkName becomes null (for example, for WiX projects).
+            // indicate it as compatible, because we cannot determine that ourselves. Offer the capability to the end-user.
+            if (frameworkName == null)
+            {
+                return true;
+            }
+
             return VersionUtility.IsCompatible(frameworkName, package.GetSupportedFrameworks());
         }
 
@@ -698,13 +719,13 @@ namespace NuGet.VisualStudio
                 Stack<string> nameParts = new Stack<string>();
 
                 Project cursor = project;
-                nameParts.Push(cursor.GetName());
+                nameParts.Push(cursor.Name);
 
                 // walk up till the solution root
                 while (cursor.ParentProjectItem != null && cursor.ParentProjectItem.ContainingProject != null)
                 {
                     cursor = cursor.ParentProjectItem.ContainingProject;
-                    nameParts.Push(cursor.GetName());
+                    nameParts.Push(cursor.Name);
                 }
 
                 return String.Join("\\", nameParts);

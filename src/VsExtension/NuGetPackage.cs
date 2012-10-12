@@ -48,7 +48,7 @@ namespace NuGet.Tools
     {
         // This product version will be updated by the build script to match the daily build version.
         // It is displayed in the Help - About box of Visual Studio
-        public const string ProductVersion = "2.0.0.0";
+        public const string ProductVersion = "2.1.0.0";
         private static readonly string[] _visualizerSupportedSKUs = new[] { "Premium", "Ultimate" };
 
         private uint _debuggingContextCookie, _solutionBuildingContextCookie;
@@ -64,7 +64,7 @@ namespace NuGet.Tools
             ServiceLocator.InitializePackageServiceProvider(this);
         }
 
-        private IVsMonitorSelection VsMonitorSelection 
+        private IVsMonitorSelection VsMonitorSelection
         {
             get
             {
@@ -146,7 +146,7 @@ namespace NuGet.Tools
             var webProxy = (IVsWebProxy)GetService(typeof(SVsWebProxy));
             Debug.Assert(webProxy != null);
 
-            var settings = Settings.LoadDefaultSettings();
+            var settings = Settings.LoadDefaultSettings(_solutionManager == null ? null : _solutionManager.SolutionFileSystem);
             var packageSourceProvider = new PackageSourceProvider(settings);
             HttpClient.DefaultCredentialProvider = new SettingsCredentialProvider(new VSRequestCredentialProvider(webProxy), packageSourceProvider);
 

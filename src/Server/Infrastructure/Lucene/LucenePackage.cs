@@ -117,6 +117,11 @@ namespace NuGet.Server.Infrastructure.Lucene
         [IgnoreField]
         public IEnumerable<IPackageAssemblyReference> AssemblyReferences { get; set; }
 
+        public IEnumerable<FrameworkName> GetSupportedFrameworks()
+        {
+            return SupportedFrameworks;
+        }
+
         public IEnumerable<IPackageFile> GetFiles()
         {
             throw new NotImplementedException();
