@@ -115,7 +115,7 @@ namespace NuGet.PowerShell.Commands
                 ErrorHandler.ThrowSolutionNotOpenTerminatingError();
             }
 
-            if (PackageManager != null)
+            if (PackageManager == null)
             {
                 return;
             }

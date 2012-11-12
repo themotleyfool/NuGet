@@ -257,8 +257,7 @@ namespace NuGet.Commands
 
                 // During package restore with parallel build, multiple projects would try to write to disk simultaneously which results in write contentions.
                 // We work around this issue by ensuring only one instance of the exe installs the package.
-                var uniqueToken = GenerateUniqueToken(packageManager, packageId, version);
-                ExecuteLocked(uniqueToken, () => packageManager.InstallPackage(package, ignoreDependencies: true, allowPrereleaseVersions: Prerelease));
+                PackageExtractor.InstallPackage(packageManager, package);
                 return true;
             }
         }
@@ -270,10 +269,28 @@ namespace NuGet.Commands
         {
             var packageManager = CreatePackageManager(fileSystem);
 
-            if (IsPackageInstalled(packageManager.LocalRepository, fileSystem, packageId, version))
+            if (!AllowMultipleVersions)
             {
-                return false;
+                var installedPackage = packageManager.LocalRepository.FindPackage(packageId);
+                if (installedPackage != null)
+                {
+                    if (version != null && installedPackage.Version >= version)
+                    {
+                        // If the package is already installed (or the version being installed is lower), then we do not need to do anything. 
+                        return false;
+                    }
+                    else if (packageManager.SourceRepository.Exists(packageId, version))
+                    {
+                        // If the package is already installed, but
+                        // (a) the version we require is different from the one that is installed, 
+                        // (b) side-by-side is disabled
+                        // we need to uninstall it.
+                        // However, before uninstalling, make sure the package exists in the source repository. 
+                        packageManager.UninstallPackage(installedPackage, forceRemove: false, removeDependencies: true);
+                    }
+                }
             }
+
             using (packageManager.SourceRepository.StartOperation(RepositoryOperationNames.Install))
             {
                 packageManager.InstallPackage(packageId, version, ignoreDependencies: false, allowPrereleaseVersions: Prerelease);
@@ -297,6 +314,7 @@ namespace NuGet.Commands
 
         protected internal virtual IFileSystem CreateFileSystem(string path)
         {
+            path = Path.GetFullPath(path);
             return new PhysicalFileSystem(path);
         }
 
@@ -335,46 +353,6 @@ namespace NuGet.Commands
                 return packagePaths.Any(fileSystem.FileExists);
             }
             return false;
-        }
-
-
-        /// <summary>
-        /// We want to base the lock name off of the full path of the package, however, the Mutex looks for files on disk if a path is given.
-        /// Additionally, it also fails if the string is longer than 256 characters. Therefore we obtain a base-64 encoded hash of the path.
-        /// </summary>
-        /// <seealso cref="http://social.msdn.microsoft.com/forums/en-us/clr/thread/D0B3BF82-4D23-47C8-8706-CC847157AC81"/>
-        private static string GenerateUniqueToken(IPackageManager packageManager, string packageId, SemanticVersion version)
-        {
-            var packagePath = packageManager.FileSystem.GetFullPath(packageManager.PathResolver.GetPackageFileName(packageId, version));
-            var pathBytes = Encoding.UTF8.GetBytes(packagePath);
-            var hashProvider = new CryptoHashProvider("SHA256");
-
-            return Convert.ToBase64String(hashProvider.CalculateHash(pathBytes)).ToUpperInvariant();
-        }
-
-        private static void ExecuteLocked(string name, Action action)
-        {
-            bool created;
-            using (var mutex = new Mutex(initiallyOwned: true, name: name, createdNew: out created))
-            {
-                try
-                {
-                    // We need to ensure only one instance of the executable performs the install. All other instances need to wait 
-                    // for the package to be installed. We'd cap the waiting duration so that other instances aren't waiting indefinitely.
-                    if (created)
-                    {
-                        action();
-                    }
-                    else
-                    {
-                        mutex.WaitOne(TimeSpan.FromMinutes(2));
-                    }
-                }
-                finally
-                {
-                    mutex.ReleaseMutex();
-                }
-            }
         }
     }
 }
