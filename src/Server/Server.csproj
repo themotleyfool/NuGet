@@ -40,12 +40,13 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\packages\log4net.2.0.0\lib\net40-full\log4net.dll</HintPath>
     </Reference>
-    <Reference Include="Lucene.Net">
-      <HintPath>..\..\packages\Lucene.Net.2.9.4.1\lib\net40\Lucene.Net.dll</HintPath>
-    </Reference>
-    <Reference Include="Lucene.Net.Linq, Version=1.0.37.0, Culture=neutral, processorArchitecture=MSIL">
+    <Reference Include="Lucene.Net, Version=3.0.3.0, Culture=neutral, PublicKeyToken=85089178b9ac3181, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\Lucene.Net.Linq.1.0.37\lib\net40-Client\Lucene.Net.Linq.dll</HintPath>
+      <HintPath>..\..\packages\Lucene.Net.3.0.3\lib\NET40\Lucene.Net.dll</HintPath>
+    </Reference>
+    <Reference Include="Lucene.Net.Linq, Version=3.0.38.0, Culture=neutral, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\packages\Lucene.Net.Linq.3.0.38\lib\net40-Client\Lucene.Net.Linq.dll</HintPath>
     </Reference>
     <Reference Include="Microsoft.CSharp" />
     <Reference Include="Microsoft.Web.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
@@ -61,9 +62,9 @@
     <Reference Include="Ninject.Web.Mvc">
       <HintPath>..\..\packages\Ninject.MVC3.3.0.0.6\lib\net40-full\Ninject.Web.Mvc.dll</HintPath>
     </Reference>
-    <Reference Include="Remotion.Linq, Version=1.13.161.1, Culture=neutral, PublicKeyToken=fee00910d6e5f53b, processorArchitecture=MSIL">
+    <Reference Include="Remotion.Linq, Version=1.13.171.1, Culture=neutral, PublicKeyToken=fee00910d6e5f53b, processorArchitecture=MSIL">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\packages\Remotion.Linq.1.13.161\lib\net35\Remotion.Linq.dll</HintPath>
+      <HintPath>..\..\packages\Remotion.Linq.1.13.171\lib\net35\Remotion.Linq.dll</HintPath>
     </Reference>
     <Reference Include="RouteMagic, Version=1.2.0.0, Culture=neutral, PublicKeyToken=84b59be021aa4cee, processorArchitecture=MSIL">
       <HintPath>..\..\packages\RouteMagic.1.2\lib\net40\RouteMagic.dll</HintPath>
