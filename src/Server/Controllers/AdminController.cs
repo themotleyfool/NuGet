@@ -18,12 +18,22 @@ namespace NuGet.Server.Controllers
         [HttpPost]
         public ActionResult Synchronize()
         {
-            Indexer.BeginSynchronizeIndexWithFileSystem(EndSynchrnonize, null);
+            Indexer.BeginSynchronizeIndexWithFileSystem(EndSynchronize, null);
 
-            return Redirect("~/");
+            return RedirectToAction("Index", "Home");
         }
 
-        private void EndSynchrnonize(IAsyncResult ar)
+        [HttpPost]
+        public ActionResult Optimize()
+        {
+            Action call = Indexer.Optimize;
+
+            call.BeginInvoke(call.EndInvoke, null);
+
+            return RedirectToAction("Index", "Home");
+        }
+
+        private void EndSynchronize(IAsyncResult ar)
         {
             try
             {

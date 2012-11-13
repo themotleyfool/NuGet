@@ -1,0 +1,14 @@
+﻿@model NuGet.Server.Models.ISearchForm
+@{ Html.BeginForm("Search", "Search", FormMethod.Get); }
+<fieldset>
+    <legend>Search</legend>
+
+    @Html.DropDownListFor(m => m.IncludePrerelease, new MultiSelectList(new[] { new { Label = "Stable Only", Value = false }, new { Label = "Include Prerelease", Value = true } }, "Value", "Label"))
+
+    @Html.TextBoxFor(m => m.Query)
+
+    <input type="submit" value="Search" />
+
+    @Html.HiddenFor(m => m.PageSize)
+</fieldset>
+@{ Html.EndForm(); }

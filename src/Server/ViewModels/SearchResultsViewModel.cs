@@ -1,10 +1,13 @@
+using System;
 using System.Collections.Generic;
 using NuGet.Server.Models;
 
 namespace NuGet.Server.ViewModels
 {
-    public class SearchResultsViewModel
+    public class SearchResultsViewModel : ISearchForm
     {
+        private const string _defaultIconUri = "http://nuget.org/Content/Images/packageDefaultIcon-50x50.png";
+
         public string Query { get; set; }
         public bool IncludePrerelease { get; set; }
         public IEnumerable<IPackage> Hits { get; set; }
@@ -14,6 +17,11 @@ namespace NuGet.Server.ViewModels
         public int Page { get; set; }
         public int PageSize { get; set; }
         public bool IsLastPage { get; set; }
+
+        public string DefaultIconUrl
+        {
+            get { return _defaultIconUri; }
+        }
 
         public SearchResultsViewModel(SearchForm form)
         {

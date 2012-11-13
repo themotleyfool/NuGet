@@ -1,0 +1,42 @@
+﻿@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+
+<fieldset>
+    <legend>Repository URLs</legend>
+    In the package manager settings, add the following URL to the list of 
+    Package Sources:
+    <blockquote>
+        <strong>@(Helpers.GetRepositoryUrl(Request.Url, Request.ApplicationPath))</strong>
+    </blockquote>
+</fieldset>
+
+@Html.Partial("_SearchForm")
+    
+<section class="indexer-status">
+    <header>Lucene Index Info</header>
+    
+    <div id="status">
+        @Html.Action("Status", "Admin")
+    </div>
+        
+    @{ Html.BeginForm("Synchronize", "Admin"); }
+        <input type="submit" value="Rebuild Index"/>
+	@{ Html.EndForm(); }
+
+    @{ Html.BeginForm("Optimize", "Admin"); }
+        <input type="submit" value="Optimize Index"/>
+    @{ Html.EndForm(); }
+</section>
+    
+<script>
+    $(document).ready(function updateStatus() {
+        $.ajax({
+            url: '@Url.Action("Status", "Admin")',
+            success: function (result) {
+                $("#status").html(result);
+                setTimeout(updateStatus, 5000);
+            }
+        });
+    });
+</script>

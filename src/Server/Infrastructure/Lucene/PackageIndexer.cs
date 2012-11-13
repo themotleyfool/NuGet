@@ -53,6 +53,8 @@ namespace NuGet.Server.Infrastructure.Lucene
                     }
                 };
 
+            UpdateStatus(IndexingState.Scanning);
+
             // Sync lucene index with filesystem whenever the web app starts.
             BeginSynchronizeIndexWithFileSystem(cb, this);
 
@@ -78,6 +80,24 @@ namespace NuGet.Server.Infrastructure.Lucene
         public IndexingStatus GetIndexingStatus()
         {
             return indexingStatus;
+        }
+
+        private void UpdateStatus(IndexingState state, int completedPackages = 0, int packagesToIndex = 0, string currentPackagePath = null)
+        {
+            using (var reader = Writer.GetReader())
+            {
+                indexingStatus = new IndexingStatus
+                {
+                    State = state,
+                    CompletedPackages = completedPackages,
+                    PackagesToIndex = packagesToIndex,
+                    CurrentPackagePath = currentPackagePath,
+                    TotalPackages = reader.NumDocs(),
+                    PendingDeletes = reader.NumDeletedDocs,
+                    IsOptimized = reader.IsOptimized(),
+                    LastModification = DateTimeUtils.FromJava(reader.IndexCommit.Timestamp)
+                };
+            }
         }
 
         public IAsyncResult BeginSynchronizeIndexWithFileSystem(AsyncCallback callback, object clientState)
@@ -106,11 +126,23 @@ namespace NuGet.Server.Infrastructure.Lucene
             }
         }
 
+        public void Optimize()
+        {
+            lock (writeLock)
+            {
+                UpdateStatus(IndexingState.Optimizing);
+
+                Writer.Optimize();
+
+                UpdateStatus(IndexingState.Idle);
+            }
+        }
+
         public void SynchronizeIndexWithFileSystem()
         {
             lock (writeLock)
             {
-                indexingStatus = new IndexingStatus { State = IndexingState.Scanning };
+                UpdateStatus(IndexingState.Scanning);
 
                 var session = OpenSession();
                 try
@@ -119,12 +151,12 @@ namespace NuGet.Server.Infrastructure.Lucene
                 }
                 finally
                 {
-                    indexingStatus = new IndexingStatus { State = IndexingState.Idle };
+                    UpdateStatus(IndexingState.Idle);
                     session.Dispose();
                 }
             }
         }
-
+        
         public void AddPackage(LucenePackage package)
         {
             lock (writeLock)
@@ -195,22 +227,22 @@ namespace NuGet.Server.Infrastructure.Lucene
             for (var i = 0; i < pathsToIndex.Length; i++)
             {
                 var path = pathsToIndex[i];
-                indexingStatus = new IndexingStatus { State = IndexingState.Building, CompletedPackages = i, PackagesToIndex = pathsToIndex.Length, CurrentPackagePath = path };
+                UpdateStatus(IndexingState.Building, completedPackages: i, packagesToIndex: pathsToIndex.Length, currentPackagePath: path);
 
                 SynchronizePackage(session, path);
 
                 if (elapsedTimer.Elapsed > CommitInterval)
                 {
-                    indexingStatus = new IndexingStatus { State = IndexingState.Commit, CompletedPackages = i, PackagesToIndex = pathsToIndex.Length };
+                    UpdateStatus(IndexingState.Commit, completedPackages: i, packagesToIndex: pathsToIndex.Length, currentPackagePath: path);
                     session.Commit();
                     elapsedTimer.Restart();
                 }
             }
 
-            indexingStatus = new IndexingStatus { State = IndexingState.Commit };
+            UpdateStatus(IndexingState.Commit);
             session.Commit();
 
-            indexingStatus = new IndexingStatus { State = IndexingState.Optimizing };
+            UpdateStatus(IndexingState.Optimizing);
             Writer.Optimize(true);
 
             Log.Info(string.Format("Lucene index updated: {0} packages added, {1} packages updated, {2} packages removed.", diff.NewPackages.Count(), diff.ModifiedPackages.Count(), deleteQueries.Length));
@@ -310,6 +342,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             lock (writeLock)
             {
+                UpdateStatus(IndexingState.Commit);
                 using (var session = OpenSession())
                 {
                     foreach (var grouping in byId)
@@ -324,6 +357,7 @@ namespace NuGet.Server.Infrastructure.Lucene
                         }
                     }
                 }
+                UpdateStatus(IndexingState.Idle);
             }
         }
 

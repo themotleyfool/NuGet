@@ -76,6 +76,9 @@
            new { controller = "TabCompletion", action = "GetPackageVersions" });
         
         // Search web UI
+        routes.MapRoute("Home", "home/{action}",
+           new { controller = "Home", action = "Index" });
+        
         routes.MapRoute("Search", "search/{action}",
            new { controller = "Search", action = "Search" });
 

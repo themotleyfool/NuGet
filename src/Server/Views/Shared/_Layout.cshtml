@@ -1,0 +1,33 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>NuGet Server</title>
+    <link href="@Url.Content("~/Content/bootstrap.min.css")" rel="Stylesheet" />
+    <link href="@Url.Content("~/Content/nuget.css")" rel="Stylesheet" />
+    <script src="@Url.Content("~/Scripts/jquery-1.7.2.min.js")"></script>
+</head>
+<body>
+    <header class="chrome">
+        <hgroup>
+            <h1>
+                <img src="@Url.Content("/img/lucene-net-icon-128.png")" alt="Logo"/>
+                NuGet Server
+            </h1>
+            <h2>Powered by Lucene.Net + Lucene.Net.Linq
+            </h2>
+        </hgroup>
+    </header>
+
+    <section class="content">
+        @RenderBody()
+    </section>
+
+    <footer class="chrome">
+        <div>
+            NuGet.Server v@(typeof(NuGet.Server.DataServices.Package).Assembly.GetName().Version)
+            |
+				<a href="https://github.com/themotleyfool/NuGet">About NuGet+Lucene</a>
+        </div>
+    </footer>
+</body>
+</html>

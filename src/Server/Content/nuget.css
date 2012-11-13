@@ -1,0 +1,81 @@
+﻿.chrome {
+    background-color: #DDD;
+}
+
+.chrome h1 {
+    margin-top: 0;
+    padding: 10px 0;
+}
+
+.chrome hgroup {
+    position: relative;
+}
+
+.chrome h2 {
+    font-size: small;
+    font-weight: normal;
+    position: absolute;
+    left: 140px;
+    bottom: -12px;
+}
+
+.chrome *, .content {
+    max-width: 960px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+footer.chrome {
+    margin-top: 25px;
+}
+
+.content h1 {
+    font-size: large;
+    font-weight: normal;
+}
+
+.content h2 {
+    font-size: medium;
+    font-weight: normal;
+}
+
+.search-results {
+    list-style: none;
+}
+
+.search-results header {
+    position: relative;
+}
+
+.search-results h1 {
+    font-size: medium;
+    margin: 20px 0 5px 0;
+    padding: 0;
+    line-height: 50px;
+}
+
+.search-results h2 {
+    font-weight: normal;
+    font-size: small;
+    margin: 10px 0;
+    padding: 0;
+    line-height: normal;
+}
+
+.package-icon {
+    width: 50px;
+    height: 50px;
+    position: absolute;
+    top: 0;
+    left: -60px;
+}
+
+.indexer-status form {
+    display: inline;
+}
+
+.indexer-status header {
+    font-size: 21px;
+    margin-bottom: 10px;
+    border-bottom: 1px black;
+}

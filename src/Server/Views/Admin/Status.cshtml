@@ -10,3 +10,7 @@
       <p>Current package: @Model.CurrentPackagePath</p>   
     }
 }
+<p>Total Packages: @Model.TotalPackages</p>
+<p>Pending Deletes: @Model.PendingDeletes</p>
+<p>Optimized: @(Model.IsOptimized ? "Yes" : "No")</p>
+<p>Index Last Modified: @Model.LastModification.ToString("r")</p>

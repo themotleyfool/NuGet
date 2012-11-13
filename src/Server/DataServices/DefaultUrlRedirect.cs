@@ -5,7 +5,7 @@ namespace NuGet.Server
     public class DefaultUrlRedirect
     {
         public const string FeedLocation = "~/api/v2";
-        public const string WelcomeLocation = "~/Default.aspx";
+        public const string WelcomeLocation = "~/home";
 
         public void Redirect(RequestContext context)
         {

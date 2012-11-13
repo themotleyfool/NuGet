@@ -15,5 +15,6 @@ namespace NuGet.Server.Infrastructure.Lucene
         void AddPackage(LucenePackage package);
         void RemovePackage(IPackage package);
         void IncrementDownloadCount(IPackage package);
+        void Optimize();
     }
 }

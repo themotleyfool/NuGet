@@ -1,6 +1,13 @@
 namespace NuGet.Server.Models
 {
-    public class SearchForm
+    public interface ISearchForm
+    {
+        string Query { get; set; }
+        bool IncludePrerelease { get; set; }
+        int PageSize { get; set; }
+    }
+
+    public class SearchForm : ISearchForm
     {
         public string Query { get; set; }
         public bool IncludePrerelease { get; set; }

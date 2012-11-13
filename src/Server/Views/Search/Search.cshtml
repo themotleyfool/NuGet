@@ -1,86 +1,76 @@
 ﻿@model NuGet.Server.ViewModels.SearchResultsViewModel
 @{
-    Layout = null;
+    Layout = "~/Views/Shared/_Layout.cshtml";
 }
-<!DOCTYPE html>
-<html>
-<head>
-    <title>NuGet - Search Results</title>
-    <style>
-        ol
-        {
-            list-style: none;
-            margin: 0;
-            padding: 0;
-        }
-        li
-        {
-            margin: 0;
-            padding: 0;
-        }
-        fieldset
-        {
-            min-height: 40px;
-            margin: 0;
-            padding: 0;
-            padding-left: 40px;
-            position: relative;
-            border-width: 1px 0 0 0;
-        }
-        img
-        {
-            position: absolute;
-            left: 0px;
-            width: 32px;
-            height: 32px;
-        }
-    </style>
-</head>
-<body>
-    <div>
-        Search for &quot;@Model.Query&quot; returned @Model.TotalHits packages
-        
-        Showing results @Model.First to @Model.Last.
 
-        <ol>
-            @foreach (var package in Model.Hits)
-            {
-                <li>
-                    <fieldset>
-                        @if (package.IconUrl != null)
-                        {
-                            <img src="@package.IconUrl" alt="icon"/>
-                        }
-                        <p>@(package.Title ?? @package.Id)
-                            @package.Version</p>
-                        <p>
-                            By: @string.Join(", ", package.Authors)</p>
-                        @if (!string.IsNullOrEmpty(package.Tags))
-                        {
-                            @("Tags: ")
-                            foreach (var tag in package.Tags.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+<header>
+    <h1>Search for &quot;@Model.Query&quot; returned @Model.TotalHits packages</h1>
+    <h2>Showing results @Model.First to @Model.Last.</h2>
+</header>
+
+@Html.Partial("_SearchForm", Model)
+
+<ol start="@Model.First" class="search-results">
+    @foreach (var package in Model.Hits)
+    {
+        <li>
+            <article class="package-summary">
+                <header>
+                    <h1>@(package.Title ?? @package.Id) @package.Version</h1>
+                    <h2>
+                        By: 
+                        @{
+                            foreach (var author in package.Authors)
                             {
-                                @Html.ActionLink(tag, "search", new { query = tag })
+                                @Html.ActionLink(author, "search", new {query = author})
                                 @(" ")
                             }
-
                         }
-                        @package.DownloadCount downloads
-                        
-                    </fieldset>
-                </li>
-            }
-        </ol>
+                    </h2>
+                    @{
+                        if (package.IconUrl != null)
+                        {
+                            <img class="package-icon" src="@(package.IconUrl)" alt="icon for @(package.Title ?? @package.Id)" />
+                        }
+                        else
+                        {
+                            <img class="package-icon" src="@Url.Content(Model.DefaultIconUrl)" alt="default package icon" />
+                        }
+                    }
+                </header>
+                <p>@package.Description</p>
+                <footer>
+                    <p>@if (!string.IsNullOrEmpty(package.Tags))
+                    {
+                        @("Tags: ")
+                        foreach (var tag in package.Tags.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            @Html.ActionLink(tag, "search", new { query = tag })
+                            @(" ")
+                        }
+                    }
+                    </p>
+                    <p>@package.DownloadCount downloads</p>
+                </footer>
+            </article>
+        </li>
+    }
+</ol>
         
-        @if (Model.Page > 0)
-        {
-            @Html.ActionLink("Previous", "Search", new { query = Model.Query, pageSize = Model.PageSize, page = Model.Page - 1 })
-        }
-        |
-        @if (!Model.IsLastPage)
-        {
-            @Html.ActionLink("Next", "Search", new { query = Model.Query, pageSize = Model.PageSize, page = Model.Page + 1 })
-        }
-    </div>
-</body>
-</html>
+@if (Model.Page > 0)
+{
+    @Html.ActionLink("Previous", "Search", new { query = Model.Query, pageSize = Model.PageSize, page = Model.Page - 1 })
+}
+|
+@if (!Model.IsLastPage)
+{
+    @Html.ActionLink("Next", "Search", new { query = Model.Query, pageSize = Model.PageSize, page = Model.Page + 1 })
+}
+
+<script>
+    $(document).ready(function() {
+        $(".package-icon").error(function() {
+            $(this).unbind("error").attr("src", "@Url.Content(Model.DefaultIconUrl)");
+        });
+    });
+</script>

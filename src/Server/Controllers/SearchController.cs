@@ -13,16 +13,17 @@ namespace NuGet.Server.Controllers
         [Inject]
         public IServerPackageRepository Repository { get; set; }
 
+        [AcceptVerbs(HttpVerbs.Get)]
         public ViewResult Search(SearchForm form)
         {
             var queryable = Repository.Search(form.Query, new string[0], form.IncludePrerelease).Where(p => p.IsLatestVersion);
             var totalHits = queryable.Count();
-            var first = form.Page*form.PageSize;
+            var first = form.Page * form.PageSize;
             var hits = queryable.Skip(first).Take(form.PageSize).ToList();
 
             return View(new SearchResultsViewModel(form)
                             {
-                                TotalHits =  totalHits,
+                                TotalHits = totalHits,
                                 Hits = hits,
                                 First = first + 1,
                                 Last = Math.Min(first + form.PageSize, totalHits),

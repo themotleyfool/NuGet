@@ -94,11 +94,13 @@
       <Link>Properties\CommonAssemblyInfo.cs</Link>
     </Compile>
     <Compile Include="Controllers\AdminController.cs" />
+    <Compile Include="Controllers\HomeController.cs" />
     <Compile Include="Controllers\SearchController.cs" />
     <Compile Include="Controllers\TabCompletionController.cs" />
     <Compile Include="DataServices\DefaultUrlRedirect.cs" />
     <Compile Include="DataServices\Package.cs" />
     <Compile Include="DataServices\PackageContext.cs" />
+    <Compile Include="Infrastructure\Lucene\DateTimeUtils.cs" />
     <Compile Include="Infrastructure\Lucene\ILucenePackageRepository.cs" />
     <Compile Include="Infrastructure\Lucene\IndexDifferenceCalculator.cs" />
     <Compile Include="Infrastructure\Lucene\IndexDifferences.cs" />
@@ -138,11 +140,21 @@
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Default.aspx" />
+    <Content Include="Content\bootstrap-responsive.css" />
+    <Content Include="Content\bootstrap-responsive.min.css" />
+    <Content Include="Content\bootstrap.css" />
+    <Content Include="Content\bootstrap.min.css" />
+    <Content Include="Content\images\glyphicons-halflings-white.png" />
+    <Content Include="Content\images\glyphicons-halflings.png" />
+    <Content Include="Content\nuget.css" />
     <Content Include="favicon.ico" />
     <Content Include="DataServices\Packages.svc" />
     <Content Include="Global.asax" />
     <Content Include="img\lucene-net-badge-180x36.png" />
+    <Content Include="img\lucene-net-icon-128.png" />
+    <Content Include="img\packageDefaultIcon-50x50.png" />
+    <Content Include="Scripts\bootstrap.js" />
+    <Content Include="Scripts\bootstrap.min.js" />
     <Content Include="Scripts\jquery-1.7.2-vsdoc.js" />
     <Content Include="Scripts\jquery-1.7.2.js" />
     <Content Include="Scripts\jquery-1.7.2.min.js" />
@@ -161,6 +173,9 @@
     <Content Include="Views\Search\Search.cshtml" />
     <Content Include="Views\Web.config" />
     <Content Include="Views\Admin\Status.cshtml" />
+    <Content Include="Views\Shared\_SearchForm.cshtml" />
+    <Content Include="Views\Home\Index.cshtml" />
+    <Content Include="Views\Shared\_Layout.cshtml" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\Core.csproj">
