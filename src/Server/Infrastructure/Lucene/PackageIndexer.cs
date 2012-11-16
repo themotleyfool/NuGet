@@ -161,10 +161,12 @@ namespace NuGet.Server.Infrastructure.Lucene
         {
             lock (writeLock)
             {
+                UpdateStatus(IndexingState.Commit);
                 using (var session = OpenSession())
                 {
                     AddPackage(package, session);
                 }
+                UpdateStatus(IndexingState.Idle);
             }
         }
 

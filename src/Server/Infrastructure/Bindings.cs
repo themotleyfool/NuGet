@@ -39,7 +39,7 @@ namespace NuGet.Server.Infrastructure
             var create = ShouldCreateIndex(indexDirectory);
             var writer = new IndexWriter(indexDirectory, analyzer, create, IndexWriter.MaxFieldLength.UNLIMITED);
 
-            var provider = new LuceneDataProvider(indexDirectory, analyzer, Version.LUCENE_29, writer);
+            var provider = new LuceneDataProvider(indexDirectory, analyzer, Version.LUCENE_30, writer);
 
             Bind<IndexWriter>().ToConstant(writer);
             Bind<LuceneDataProvider>().ToConstant(provider);

@@ -38,12 +38,12 @@
         // Route to create a new package
         routes.MapDelegate("CreatePackage-Base",
                            "api/v2",
-                           new { httpMethod = new HttpMethodConstraint("PUT") },
+                           new { httpMethod = new HttpMethodConstraint("PUT", "POST") },
                            context => CreatePackageService().CreatePackage(context.HttpContext));
 
         routes.MapDelegate("CreatePackage",
                            "api/v2/package",
-                           new { httpMethod = new HttpMethodConstraint("PUT") },
+                           new { httpMethod = new HttpMethodConstraint("PUT", "POST") },
                            context => CreatePackageService().CreatePackage(context.HttpContext));
 
         // Route to delete packages

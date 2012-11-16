@@ -83,7 +83,14 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         private void SynchronizeLater(object state)
         {
-            Indexer.SynchronizeIndexWithFileSystem();
+            try
+            {
+                Indexer.SynchronizeIndexWithFileSystem();
+            }
+            catch (Exception ex)
+            {
+                Log.Error(m => m("Unhandled exception synchronizing Lucene index with packages on file system.", ex));
+            }
         }
 
         public void Dispose()
