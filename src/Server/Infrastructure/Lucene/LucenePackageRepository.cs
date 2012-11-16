@@ -17,7 +17,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         static LucenePackageRepository()
         {
-            Mapper.CreateMap<IPackage, LucenePackage>();
+            Mapper.CreateMap<IPackage, LucenePackage>().ForMember(dest => dest.Version, opt => opt.MapFrom(src => new StrictSemanticVersion(src.Version.ToString())));
             Mapper.CreateMap<DerivedPackageData, LucenePackage>();
             Mapper.CreateMap<LucenePackage, DerivedPackageData>();
         }

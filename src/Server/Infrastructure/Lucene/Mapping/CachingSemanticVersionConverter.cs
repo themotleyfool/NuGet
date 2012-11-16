@@ -8,7 +8,7 @@ namespace NuGet.Server.Infrastructure.Lucene.Mapping
     public class CachingSemanticVersionConverter : SemanticVersionTypeConverter
     {
         private static readonly ReaderWriterLockSlim locks = new ReaderWriterLockSlim(LockRecursionPolicy.NoRecursion);
-        private static readonly IDictionary<string, SemanticVersion> cache = new Dictionary<string,SemanticVersion>();
+        private static readonly IDictionary<string, StrictSemanticVersion> cache = new Dictionary<string, StrictSemanticVersion>();
 
         public override object ConvertFrom(ITypeDescriptorContext context, CultureInfo culture, object value)
         {
@@ -18,7 +18,7 @@ namespace NuGet.Server.Infrastructure.Lucene.Mapping
 
             try
             {
-                SemanticVersion version;
+                StrictSemanticVersion version;
                 if (cache.TryGetValue(stringValue, out version))
                 {
                     return version;
@@ -27,7 +27,8 @@ namespace NuGet.Server.Infrastructure.Lucene.Mapping
                 locks.EnterWriteLock();
                 try
                 {
-                    version = (SemanticVersion) base.ConvertFrom(context, culture, value);
+                    var baseVersion = base.ConvertFrom(context, culture, value);
+                    version = baseVersion != null ? new StrictSemanticVersion(baseVersion.ToString()) : null;
                     cache[stringValue] = version;
                     return version;
                 }

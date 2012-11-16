@@ -138,7 +138,7 @@ namespace Server.Test.Controllers
 
         private void AddSamplePackage(string id, string version)
         {
-            var semanticVersion = new SemanticVersion(version);
+            var semanticVersion = new StrictSemanticVersion(version);
             
             packages.Add(new LucenePackage(new MockFileSystem()) { Id = id, Version = semanticVersion });
         }

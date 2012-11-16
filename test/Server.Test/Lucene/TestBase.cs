@@ -42,7 +42,7 @@ namespace Server.Test.Lucene
             var p = new LucenePackage(fileSystem.Object, path => new MemoryStream())
                         {
                             Id = id,
-                            Version = version != null ? new SemanticVersion(version) : null,
+                            Version = version != null ? new StrictSemanticVersion(version) : null,
                             DownloadCount = -1,
                             VersionDownloadCount = -1
                         };

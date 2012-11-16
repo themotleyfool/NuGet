@@ -87,10 +87,12 @@ namespace NuGet.Dialog.Test
             provider.ExecuteCompletedCallback = delegate
             {
                 // Assert
+                var version = packageB.Version;
+
                 packageManager.Verify(p => p.InstallPackage(
                     projectManager1.Object,
                     packageB.Id,
-                    packageB.Version,
+                    version,
                     false,
                     true,
                     provider),
@@ -99,7 +101,7 @@ namespace NuGet.Dialog.Test
                 packageManager.Verify(p => p.InstallPackage(
                     projectManager2.Object,
                     packageB.Id,
-                    packageB.Version,
+                    version,
                     false,
                     true,
                     provider),
@@ -309,10 +311,12 @@ namespace NuGet.Dialog.Test
             provider.ExecuteCompletedCallback = delegate
             {
                 // Assert
+                var version = packageB.Version;
+
                 packageManager.Verify(p => p.UninstallPackage(
                     null,
                     packageB.Id,
-                    packageB.Version,
+                    version,
                     false,
                     false,
                     provider),
@@ -386,10 +390,11 @@ namespace NuGet.Dialog.Test
             provider.ExecuteCompletedCallback = delegate
             {
                 // Assert
+                var version = packageB.Version;
                 packageManager.Verify(p => p.InstallPackage(
                     projectManager2.Object,
                     packageB.Id,
-                    packageB.Version,
+                    version,
                     false,
                     false,
                     provider),

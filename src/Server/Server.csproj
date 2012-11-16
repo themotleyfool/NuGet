@@ -116,6 +116,7 @@
     <Compile Include="Infrastructure\Lucene\PackageAnalyzer.cs" />
     <Compile Include="Infrastructure\Lucene\PackageFileSystemWatcher.cs" />
     <Compile Include="Infrastructure\Lucene\PackageIndexer.cs" />
+    <Compile Include="Infrastructure\Lucene\StrictSemanticVersion.cs" />
     <Compile Include="Infrastructure\Lucene\TimerHelper.cs" />
     <Compile Include="Infrastructure\OneFolderPerPackageIdPathResolver.cs" />
     <Compile Include="Log.cs" />

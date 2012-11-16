@@ -12,7 +12,7 @@ namespace NuGet
     /// </summary>
     [Serializable]
     [TypeConverter(typeof(SemanticVersionTypeConverter))]
-    public sealed class SemanticVersion : IComparable, IComparable<SemanticVersion>, IEquatable<SemanticVersion>
+    public class SemanticVersion : IComparable, IComparable<SemanticVersion>, IEquatable<SemanticVersion>
     {
         private const RegexOptions _flags = RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.ExplicitCapture;
         private static readonly Regex _semanticVersionRegex = new Regex(@"^(?<Version>\d+(\s*\.\s*\d+){0,3})(?<Release>-[a-z][0-9a-z-]*)?$", _flags);

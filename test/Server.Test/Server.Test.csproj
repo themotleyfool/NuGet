@@ -65,6 +65,7 @@
     <Compile Include="FeedPackageTest.cs" />
     <Compile Include="Lucene\Mapping\PackageDependencySetConverterTests.cs" />
     <Compile Include="Lucene\PackageIndexerIncrementDownloadCountTests.cs" />
+    <Compile Include="Lucene\StrictSemanticVersionTests.cs" />
     <Compile Include="PackageAuthenticationServiceTests.cs" />
     <Compile Include="PackageSvcFacts.cs" />
     <Compile Include="Lucene\IndexDifferenceCalculatorTests.cs" />
