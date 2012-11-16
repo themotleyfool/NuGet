@@ -10,10 +10,12 @@
     <header class="chrome">
         <hgroup>
             <h1>
-                <img src="@Url.Content("/img/lucene-net-icon-128.png")" alt="Logo"/>
-                NuGet Server
+                <a href="@Url.Action("Index", "Home")">
+                    <img src="@Url.Content("/img/lucene-net-icon-128.png")" alt="Logo"/>
+                    NuGet Server
+                </a>
             </h1>
-            <h2>Powered by Lucene.Net + Lucene.Net.Linq
+            <h2>Powered by <a href="http://lucenenet.apache.org/">Lucene.Net</a> + <a href="http://nuget.org/packages/Lucene.Net.Linq">Lucene.Net.Linq</a>
             </h2>
         </hgroup>
     </header>
@@ -26,7 +28,7 @@
         <div>
             NuGet.Server v@(typeof(NuGet.Server.DataServices.Package).Assembly.GetName().Version)
             |
-				<a href="https://github.com/themotleyfool/NuGet">About NuGet+Lucene</a>
+            <a href="https://github.com/themotleyfool/NuGet">About NuGet+Lucene</a>
         </div>
     </footer>
 </body>

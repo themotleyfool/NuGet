@@ -25,6 +25,10 @@
     margin-right: auto;
 }
 
+.chrome a:hover {
+    text-decoration: none;
+}
+
 footer.chrome {
     margin-top: 25px;
 }
