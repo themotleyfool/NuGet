@@ -18,7 +18,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         private volatile IndexingStatus indexingStatus = new IndexingStatus { State = IndexingState.Idle };
         private readonly BlockingCollection<IPackage> pendingDownloadIncrements = new BlockingCollection<IPackage>();
-        private Thread downloadCounterThread;
+        private Task downloadUpdaterTask;
 
         [Inject]
         public IFileSystem FileSystem { get; set; }
@@ -58,16 +58,13 @@ namespace NuGet.Server.Infrastructure.Lucene
             // Sync lucene index with filesystem whenever the web app starts.
             BeginSynchronizeIndexWithFileSystem(cb, this);
 
-            downloadCounterThread = new Thread(DownloadIncrementLoop) { Name = "Lucene Package Download Count Updater", IsBackground = true };
-            downloadCounterThread.Start();
+            downloadUpdaterTask = Task.Factory.StartNew(DownloadIncrementLoop, TaskCreationOptions.LongRunning);
         }
 
         public void Dispose()
         {
-            if (downloadCounterThread == null) return;
             pendingDownloadIncrements.CompleteAdding();
-            downloadCounterThread.Join();
-            downloadCounterThread = null;
+            downloadUpdaterTask.Wait();
         }
 
         /// <summary>
