@@ -100,6 +100,7 @@
     <Compile Include="DataServices\DefaultUrlRedirect.cs" />
     <Compile Include="DataServices\Package.cs" />
     <Compile Include="DataServices\PackageContext.cs" />
+    <Compile Include="Infrastructure\Lucene\BlockingCollectionExtensions.cs" />
     <Compile Include="Infrastructure\Lucene\DateTimeUtils.cs" />
     <Compile Include="Infrastructure\Lucene\ILucenePackageRepository.cs" />
     <Compile Include="Infrastructure\Lucene\IndexDifferenceCalculator.cs" />

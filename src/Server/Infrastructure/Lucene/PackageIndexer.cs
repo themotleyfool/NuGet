@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -15,9 +16,8 @@ namespace NuGet.Server.Infrastructure.Lucene
     {
         private readonly object writeLock = new object();
 
-        private volatile bool disposed;
         private volatile IndexingStatus indexingStatus = new IndexingStatus { State = IndexingState.Idle };
-        private readonly IList<IPackage> pendingDownloadIncrements = new List<IPackage>();
+        private readonly BlockingCollection<IPackage> pendingDownloadIncrements = new BlockingCollection<IPackage>();
         private Thread downloadCounterThread;
 
         [Inject]
@@ -64,12 +64,8 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public void Dispose()
         {
-            disposed = true;
             if (downloadCounterThread == null) return;
-            lock (pendingDownloadIncrements)
-            {
-                Monitor.Pulse(pendingDownloadIncrements);    
-            }
+            pendingDownloadIncrements.CompleteAdding();
             downloadCounterThread.Join();
             downloadCounterThread = null;
         }
@@ -313,23 +309,11 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         private void DownloadIncrementLoop()
         {
-            while (!disposed)
+            while (!pendingDownloadIncrements.IsCompleted)
             {
-                IList<IPackage> copy;
-
-                lock (pendingDownloadIncrements)
-                {
-                    copy = PendingDownloadIncrements;
-                    pendingDownloadIncrements.Clear();
-
-                    if (copy.IsEmpty())
-                    {
-                        Monitor.Wait(pendingDownloadIncrements, TimeSpan.FromMinutes(1));
-                        continue;
-                    }
-                }
-
-                ApplyPendingDownloadIncrements(copy);
+                var items = pendingDownloadIncrements.TakeAvailable(Timeout.InfiniteTimeSpan);
+                
+                ApplyPendingDownloadIncrements(items);
             }
         }
 
@@ -340,6 +324,8 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public void ApplyPendingDownloadIncrements(IList<IPackage> increments)
         {
+            if (increments.Count == 0) return;
+
             var byId = increments.ToLookup(p => p.Id);
 
             lock (writeLock)
