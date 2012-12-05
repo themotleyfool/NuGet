@@ -1,24 +1,28 @@
-﻿using System;
-using System.Linq;
-using Moq;
+﻿using System.Linq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace Server.Test.Lucene
 {
     public class PackageIndexerAddPackageTests : PackageIndexerTestBase
     {
-        [Fact]
-        public void AddPackage()
+        public PackageIndexerAddPackageTests()
         {
-            indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
+            indexer.Initialize();
+        }
+
+        [Fact]
+        public async void AddPackage()
+        {
+            await indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
 
             Assert.Equal(1, datasource.Count());
         }
 
         [Fact]
-        public void AddPackage_SetIsLatestVersion()
+        public async void AddPackage_SetIsLatestVersion()
         {
-            indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
+            await indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
 
             Assert.True(datasource.First().IsLatestVersion, "IsLatestVersion");
         }
@@ -26,8 +30,10 @@ namespace Server.Test.Lucene
         [Fact]
         public void AddPackage_MultipleVersions_UnsetIsLatestVersion()
         {
-            indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
-            indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.1"));
+            var t1 = indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
+            var t2 = indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.1"));
+
+            Task.WaitAll(t1, t2);
 
             var packages = datasource.OrderBy(p => p.Version).ToArray();
             Assert.False(packages.First().IsLatestVersion, "older.IsLatestVersion");
@@ -35,37 +41,37 @@ namespace Server.Test.Lucene
         }
 
         [Fact]
-        public void AddPackage_Replaces()
+        public async void AddPackage_Replaces()
         {
             InsertPackage("Sample.Package", "1.0");
 
-            indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
+            await indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
 
             Assert.Equal(1, datasource.Count());
         }
 
         [Fact]
-        public void AddPackage_ReplacePreservesVersionDownloadCount()
+        public async void AddPackage_ReplacePreservesVersionDownloadCount()
         {
             const int versionDownloadCount = 199;
             var package = MakeSamplePackage("Sample.Package", "1.0");
             package.VersionDownloadCount = versionDownloadCount;
             InsertPackage(package);
 
-            indexer.AddPackage(package);
+            await indexer.AddPackage(package);
 
             Assert.Equal(versionDownloadCount, datasource.First().VersionDownloadCount);
         }
 
         [Fact]
-        public void AddPackage_ReplacePreservesDownloadCount()
+        public async void AddPackage_ReplacePreservesDownloadCount()
         {
             const int downloadCount = 23999;
             var package = MakeSamplePackage("Sample.Package", "1.0");
             package.DownloadCount = downloadCount;
             InsertPackage(package);
 
-            indexer.AddPackage(package);
+            await indexer.AddPackage(package);
 
             Assert.Equal(downloadCount, datasource.First().DownloadCount);
         }
@@ -73,8 +79,10 @@ namespace Server.Test.Lucene
         [Fact]
         public void AddPackage_NewVersion_ZerosVersionDownloadCount()
         {
-            indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
-            indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.1"));
+            var t1 = indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.0"));
+            var t2 = indexer.AddPackage(MakeSamplePackage("Sample.Package", "1.1"));
+
+            Task.WaitAll(t1, t2);
 
             var packages = datasource.OrderBy(p => p.Version).ToArray();
             Assert.Equal(0, packages.Last().VersionDownloadCount);

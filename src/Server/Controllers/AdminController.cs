@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using System.Web.Mvc;
 using Ninject;
 using NuGet.Server.Infrastructure.Lucene;
@@ -18,7 +19,7 @@ namespace NuGet.Server.Controllers
         [HttpPost]
         public ActionResult Synchronize()
         {
-            Indexer.BeginSynchronizeIndexWithFileSystem(EndSynchronize, null);
+            Indexer.SynchronizeIndexWithFileSystem().ContinueWith(LogException);
 
             return RedirectToAction("Index", "Home");
         }
@@ -26,22 +27,16 @@ namespace NuGet.Server.Controllers
         [HttpPost]
         public ActionResult Optimize()
         {
-            Action call = Indexer.Optimize;
-
-            call.BeginInvoke(call.EndInvoke, null);
+            Task.Run((Action) Indexer.Optimize).ContinueWith(LogException);
 
             return RedirectToAction("Index", "Home");
         }
 
-        private void EndSynchronize(IAsyncResult ar)
+        private void LogException(Task task)
         {
-            try
+            if (task.Exception != null)
             {
-                Indexer.EndSynchronizeIndexWithFileSystem(ar);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex);
+                Log.Error(task.Exception);
             }
         }
     }

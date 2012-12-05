@@ -33,7 +33,7 @@ namespace Server.Test.Lucene
             var analyzer = new PackageAnalyzer();
             indexWriter = new IndexWriter(dir, analyzer, true, IndexWriter.MaxFieldLength.UNLIMITED);
 
-            provider = new LuceneDataProvider(dir, analyzer, Version.LUCENE_29, indexWriter);
+            provider = new LuceneDataProvider(dir, analyzer, Version.LUCENE_30, indexWriter);
             datasource = provider.AsQueryable(() => new LucenePackage(fileSystem.Object));
         }
 

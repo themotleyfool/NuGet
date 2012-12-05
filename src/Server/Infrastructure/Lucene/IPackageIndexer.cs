@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
@@ -9,12 +10,11 @@ namespace NuGet.Server.Infrastructure.Lucene
         /// </summary>
         IndexingStatus GetIndexingStatus();
 
-        IAsyncResult BeginSynchronizeIndexWithFileSystem(AsyncCallback callback, object clientState);
-        void EndSynchronizeIndexWithFileSystem(IAsyncResult ar);
-        void SynchronizeIndexWithFileSystem();
-        void AddPackage(LucenePackage package);
-        void RemovePackage(IPackage package);
-        void IncrementDownloadCount(IPackage package);
+        Task SynchronizeIndexWithFileSystem();
+        Task AddPackage(LucenePackage package);
+        Task RemovePackage(IPackage package);
+        Task IncrementDownloadCount(IPackage package);
+
         void Optimize();
     }
 }

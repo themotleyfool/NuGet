@@ -84,8 +84,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public override IQueryable<IPackage> GetPackages()
         {
-            // cast is necessary due to https://www.re-motion.org/jira/browse/RM-4482
-            return LucenePackages.Select(p => (IPackage)p);
+            return LucenePackages;
         }
 
         public override IPackage FindPackage(string packageId, SemanticVersion version)
@@ -127,8 +126,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             packages = packages.OrderBy(p => p.Score()).Boost(BoostByDownloadCount);
 
-            // cast is necessary due to https://www.re-motion.org/jira/browse/RM-4482
-            return packages.Select(p => (IPackage)p);
+            return packages;
         }
 
         public float BoostByDownloadCount(LucenePackage p)

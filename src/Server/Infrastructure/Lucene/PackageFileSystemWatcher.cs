@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Threading.Tasks;
 using Common.Logging;
 using Ninject;
 
@@ -105,7 +106,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             timerHelper.ResetTimer(e.FullPath, AddToIndexAfterQuietTime, e, QuietTime);
         }
 
-        public void EndQuietTime(string path)
+        public async void EndQuietTime(string path)
         {
             var fullPath = Path.Combine(FileSystem.Root, path);
 
@@ -130,7 +131,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             }
 
             Log.Trace(m => m("Indexing package synchronously: " + fullPath));
-            AddToIndex(fullPath);
+            await AddToIndex(fullPath);
 
             // Cancel any events that came in while we were indexing.
             timerHelper.CancelTimer(fullPath);
@@ -177,16 +178,17 @@ namespace NuGet.Server.Infrastructure.Lucene
             RemoveFromIndex(e.FullPath);
         }
 
-        public void AddToIndex(string fullPath)
+        public Task AddToIndex(string fullPath)
         {
             try
             {
                 var package = PackageRepository.LoadFromFileSystem(fullPath);
-                Indexer.AddPackage(package);
+                return Indexer.AddPackage(package);
             }
             catch (Exception ex)
             {
                 Log.Error(ex);
+                return Task.FromResult<object>(null);
             }
         }
 

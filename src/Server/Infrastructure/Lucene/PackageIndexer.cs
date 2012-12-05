@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Common.Logging;
 using Lucene.Net.Index;
 using Lucene.Net.Linq;
 using Lucene.Net.Search;
@@ -14,11 +14,48 @@ namespace NuGet.Server.Infrastructure.Lucene
 {
     public class PackageIndexer : IPackageIndexer, IInitializable, IDisposable
     {
-        private readonly object writeLock = new object();
+        public static ILog Log = LogManager.GetLogger<PackageIndexer>();
 
-        private volatile IndexingStatus indexingStatus = new IndexingStatus { State = IndexingState.Idle };
-        private readonly BlockingCollection<IPackage> pendingDownloadIncrements = new BlockingCollection<IPackage>();
-        private Task downloadUpdaterTask;
+        private enum UpdateType { Add, Remove, RemoveByPath, Increment }
+        private class Update
+        {
+            private readonly LucenePackage package;
+            private readonly UpdateType updateType;
+            private readonly TaskCompletionSource<object> signal = new TaskCompletionSource<object>();
+
+            public Update(LucenePackage package, UpdateType updateType)
+            {
+                this.package = package;
+                this.updateType = updateType;
+            }
+
+            public LucenePackage Package
+            {
+                get { return package; }
+            }
+
+            public UpdateType UpdateType
+            {
+                get { return updateType; }
+            }
+
+            public Task Task
+            {
+                get
+                {
+                    return signal.Task;
+                }
+            }
+
+            public void SetComplete()
+            {
+                signal.SetResult(null);
+            }
+        }
+
+        private readonly IList<IndexingStatus> indexingStatus = new List<IndexingStatus> { new IndexingStatus { State = IndexingState.Idle } };
+        private readonly BlockingCollection<Update> pendingUpdates = new BlockingCollection<Update>();
+        private Task indexUpdaterTask;
 
         [Inject]
         public IFileSystem FileSystem { get; set; }
@@ -32,39 +69,26 @@ namespace NuGet.Server.Infrastructure.Lucene
         [Inject]
         public ILucenePackageRepository PackageRepository { get; set; }
 
-        public TimeSpan CommitInterval { get; set; }
-
-        public PackageIndexer()
-        {
-            CommitInterval = TimeSpan.FromMinutes(1);
-        }
-
         public void Initialize()
         {
-            AsyncCallback cb = ar =>
+            Action<Task> cb = task =>
                 {
-                    try
+                    if (task.Exception != null)
                     {
-                        EndSynchronizeIndexWithFileSystem(ar);
-                    }
-                    catch (Exception ex)
-                    {
-                        Log.Error(ex);
+                        Log.Error(task.Exception);
                     }
                 };
 
-            UpdateStatus(IndexingState.Scanning);
-
             // Sync lucene index with filesystem whenever the web app starts.
-            BeginSynchronizeIndexWithFileSystem(cb, this);
+            SynchronizeIndexWithFileSystem().ContinueWith(cb);
 
-            downloadUpdaterTask = Task.Factory.StartNew(DownloadIncrementLoop, TaskCreationOptions.LongRunning);
+            indexUpdaterTask = Task.Factory.StartNew(IndexUpdateLoop, TaskCreationOptions.LongRunning);
         }
 
         public void Dispose()
         {
-            pendingDownloadIncrements.CompleteAdding();
-            downloadUpdaterTask.Wait();
+            pendingUpdates.CompleteAdding();
+            indexUpdaterTask.Wait();
         }
 
         /// <summary>
@@ -72,19 +96,21 @@ namespace NuGet.Server.Infrastructure.Lucene
         /// </summary>
         public IndexingStatus GetIndexingStatus()
         {
-            return indexingStatus;
-        }
+            IndexingStatus current;
 
-        private void UpdateStatus(IndexingState state, int completedPackages = 0, int packagesToIndex = 0, string currentPackagePath = null)
-        {
+            lock (indexingStatus)
+            {
+                current = indexingStatus.Last();
+            }
+
             using (var reader = Writer.GetReader())
             {
-                indexingStatus = new IndexingStatus
+                return new IndexingStatus
                 {
-                    State = state,
-                    CompletedPackages = completedPackages,
-                    PackagesToIndex = packagesToIndex,
-                    CurrentPackagePath = currentPackagePath,
+                    State = current.State,
+                    CompletedPackages = current.CompletedPackages,
+                    PackagesToIndex = current.PackagesToIndex,
+                    CurrentPackagePath = current.CurrentPackagePath,
                     TotalPackages = reader.NumDocs(),
                     PendingDeletes = reader.NumDeletedDocs,
                     IsOptimized = reader.IsOptimized(),
@@ -92,101 +118,53 @@ namespace NuGet.Server.Infrastructure.Lucene
                 };
             }
         }
-
-        public IAsyncResult BeginSynchronizeIndexWithFileSystem(AsyncCallback callback, object clientState)
-        {
-            var task = new Task(state => SynchronizeIndexWithFileSystem(), clientState, TaskCreationOptions.LongRunning);
-
-            if (callback != null)
-            {
-                task.ContinueWith(t => callback(t));
-            }
-
-            task.Start();
-
-            return task;
-        }
-
-        public void EndSynchronizeIndexWithFileSystem(IAsyncResult ar)
-        {
-            var task = (Task)ar;
-            using (task)
-            {
-                if (task.IsFaulted)
-                {
-                    throw (Exception) task.Exception ?? new InvalidOperationException("Task faulted but Exception was null.");
-                }
-            }
-        }
-
+        
         public void Optimize()
         {
-            lock (writeLock)
+            using (UpdateStatus(IndexingState.Optimizing))
             {
-                UpdateStatus(IndexingState.Optimizing);
-
                 Writer.Optimize();
-
-                UpdateStatus(IndexingState.Idle);
             }
         }
 
-        public void SynchronizeIndexWithFileSystem()
+        public Task SynchronizeIndexWithFileSystem()
         {
-            lock (writeLock)
-            {
-                UpdateStatus(IndexingState.Scanning);
+            IndexDifferences differences = null;
+            Action findDifferences = () =>
+                {
+                    
+                    using (UpdateStatus(IndexingState.Scanning))
+                    {
+                        using (var session = OpenSession())
+                        {
+                            differences = IndexDifferenceCalculator.FindDifferences(FileSystem, session.Query());
+                        }
+                    }
+                };
 
-                var session = OpenSession();
-                try
-                {
-                    SynchronizeIndexWithFileSystem(IndexDifferenceCalculator.FindDifferences(FileSystem, session.Query()), session);
-                }
-                finally
-                {
-                    UpdateStatus(IndexingState.Idle);
-                    session.Dispose();
-                }
-            }
+            return Task.Run(findDifferences).ContinueWith(task => SynchronizeIndexWithFileSystem(differences), TaskContinuationOptions.NotOnFaulted);
         }
-        
-        public void AddPackage(LucenePackage package)
+
+        public Task AddPackage(LucenePackage package)
         {
-            lock (writeLock)
-            {
-                UpdateStatus(IndexingState.Commit);
-                using (var session = OpenSession())
-                {
-                    AddPackage(package, session);
-                }
-                UpdateStatus(IndexingState.Idle);
-            }
+            var update = new Update(package, UpdateType.Add);
+            pendingUpdates.Add(update);
+            return update.Task;
         }
 
-        public void RemovePackage(IPackage package)
+        public Task RemovePackage(IPackage package)
         {
             if (!(package is LucenePackage)) throw new ArgumentException("Package of type " + package.GetType() + " not supported.");
 
-            var lucenePackage = (LucenePackage)package;
-
-            lock (writeLock)
-            {
-                using (var session = OpenSession())
-                {
-                    var remainingPackages = from p in session.Query()
-                                            where p.Id == package.Id && p.Version != package.Version
-                                            orderby p.Version descending
-                                            select p;
-
-                    session.Delete(lucenePackage);
-
-                    UpdatePackageVersionFlags(remainingPackages);
-                }
-            }
+            var update = new Update((LucenePackage)package, UpdateType.Remove);
+            pendingUpdates.Add(update);
+            return update.Task;
         }
 
-        public void IncrementDownloadCount(IPackage package)
+        public Task IncrementDownloadCount(IPackage package)
         {
+            if (!(package is LucenePackage)) throw new ArgumentException("Package of type " + package.GetType() + " not supported.");
+
             if (string.IsNullOrWhiteSpace(package.Id))
             {
                 throw new InvalidOperationException("Package Id must be specified.");
@@ -197,96 +175,148 @@ namespace NuGet.Server.Infrastructure.Lucene
                 throw new InvalidOperationException("Package Version must be specified.");
             }
 
-            lock (pendingDownloadIncrements)
-            {
-                pendingDownloadIncrements.Add(package);
-                Monitor.Pulse(pendingDownloadIncrements);
-            }
+            var update = new Update((LucenePackage) package, UpdateType.Increment);
+            pendingUpdates.Add(update);
+            return update.Task;
         }
-        
-        public void SynchronizeIndexWithFileSystem(IndexDifferences diff, ISession<LucenePackage> session)
+
+        internal void SynchronizeIndexWithFileSystem(IndexDifferences diff)
         {
             if (diff.IsEmpty) return;
 
-            var deleteQueries = diff.MissingPackages.Select(p => (Query)new TermQuery(new Term("Path", p))).ToArray();
+            var tasks = new ConcurrentQueue<Task>();
 
-            if (deleteQueries.Any())
+            Log.Info(string.Format("Updates to process: {0} packages added, {1} packages updated, {2} packages removed.", diff.NewPackages.Count(), diff.ModifiedPackages.Count(), diff.MissingPackages.Count()));
+
+            foreach (var path in diff.MissingPackages)
             {
-                session.Delete(deleteQueries);
+                var package = new LucenePackage(FileSystem) { Path = path };
+                var update = new Update(package, UpdateType.RemoveByPath);
+                pendingUpdates.Add(update);
+                tasks.Enqueue(update.Task);
             }
-
+            
             var pathsToIndex = diff.NewPackages.Union(diff.ModifiedPackages).OrderBy(p => p).ToArray();
 
-            var elapsedTimer = Stopwatch.StartNew();
+            var i = 0;
 
-            for (var i = 0; i < pathsToIndex.Length; i++)
-            {
-                var path = pathsToIndex[i];
-                UpdateStatus(IndexingState.Building, completedPackages: i, packagesToIndex: pathsToIndex.Length, currentPackagePath: path);
-
-                SynchronizePackage(session, path);
-
-                if (elapsedTimer.Elapsed > CommitInterval)
+            Parallel.ForEach(pathsToIndex, new ParallelOptions() { MaxDegreeOfParallelism = 5 }, (p, s) =>
                 {
-                    UpdateStatus(IndexingState.Commit, completedPackages: i, packagesToIndex: pathsToIndex.Length, currentPackagePath: path);
-                    session.Commit();
-                    elapsedTimer.Restart();
-                }
-            }
+                    using(UpdateStatus(IndexingState.Building, completedPackages: Interlocked.Increment(ref i), packagesToIndex: pathsToIndex.Length, currentPackagePath: p))
+                    {
+                        tasks.Enqueue(SynchronizePackage(p));
+                    }
+                });
 
-            UpdateStatus(IndexingState.Commit);
-            session.Commit();
-
-            UpdateStatus(IndexingState.Optimizing);
-            Writer.Optimize(true);
-
-            Log.Info(string.Format("Lucene index updated: {0} packages added, {1} packages updated, {2} packages removed.", diff.NewPackages.Count(), diff.ModifiedPackages.Count(), deleteQueries.Length));
+            Task.WaitAll(tasks.ToArray());
         }
 
-        private void SynchronizePackage(ISession<LucenePackage> session, string path)
+        private Task SynchronizePackage(string path)
         {
             try
             {
                 var package = PackageRepository.LoadFromFileSystem(path);
-                AddPackage(package, session);
+                return AddPackage(package);
             }
             catch (Exception ex)
             {
                 Log.Error("Failed to index package path: " + path, ex);
+                return Task.FromResult(ex);
+            }
+        }
+        
+        private void IndexUpdateLoop()
+        {
+            while (!pendingUpdates.IsCompleted)
+            {
+                var items = pendingUpdates.TakeAvailable(Timeout.InfiniteTimeSpan).ToList();
+
+                if (items.Any())
+                {
+                    ApplyUpdates(items);
+                }
+                
+                items.ForEach(i => i.SetComplete());
             }
         }
 
-        private void AddPackage(LucenePackage package, ISession<LucenePackage> session)
+        private void ApplyUpdates(IList<Update> items)
+        {
+            Log.Trace(m => m("Processing {0} updates.", items.Count()));
+
+            using (var session = OpenSession())
+            {
+                using (UpdateStatus(IndexingState.Building))
+                {
+
+                    var removals =
+                        items.Where(i => i.UpdateType == UpdateType.Remove).Select(i => i.Package).ToList();
+                    removals.ForEach(pkg => RemovePackageInternal(pkg, session));
+
+                    var removalsByPath =
+                        items.Where(i => i.UpdateType == UpdateType.RemoveByPath).Select(i => i.Package.Path).ToList();
+                    var deleteQueries = removalsByPath.Select(p => (Query)new TermQuery(new Term("Path", p))).ToArray();
+                    session.Delete(deleteQueries);
+
+                    var additions = items.Where(i => i.UpdateType == UpdateType.Add).Select(i => i.Package).ToList();
+                    ApplyPendingAdditions(additions, session);
+
+                    var downloadUpdates =
+                        items.Where(i => i.UpdateType == UpdateType.Increment).Select(i => i.Package).ToList();
+                    ApplyPendingDownloadIncrements(downloadUpdates, session);
+                }
+
+                using (UpdateStatus(IndexingState.Commit))
+                {
+                    session.Commit();
+                }
+            }
+        }
+
+        private void ApplyPendingAdditions(IEnumerable<LucenePackage> additions, ISession<LucenePackage> session)
+        {
+            foreach (var grouping in additions.GroupBy(pkg => pkg.Id))
+            {
+                AddPackagesInternal(grouping.Key, grouping.ToList(), session);
+            }
+        }
+
+        private void AddPackagesInternal(string packageId, IEnumerable<LucenePackage> packages, ISession<LucenePackage> session)
         {
             var currentPackages = (from p in session.Query()
-                                   where p.Id == package.Id
+                                   where p.Id == packageId
                                    orderby p.Version descending
                                    select p).ToList();
 
             var newest = currentPackages.FirstOrDefault();
+            var versionDownloadCount = newest != null ? newest.VersionDownloadCount : 0;
 
-            if (newest == null)
+            foreach (var package in packages)
             {
-                package.VersionDownloadCount = 0;
-                package.DownloadCount = 0;
+                var packageToReplace = currentPackages.Find(p => p.Version == package.Version);
+
+                package.VersionDownloadCount = versionDownloadCount;
+                package.DownloadCount = packageToReplace != null ? packageToReplace.DownloadCount : 0;
+
+                currentPackages.Remove(packageToReplace);
+                currentPackages.Add(package);
+
+                session.Add(package);
             }
-            else
-            {
-                package.DownloadCount = newest.DownloadCount;
-                package.VersionDownloadCount = 0;
-
-                if (newest.Version == package.Version)
-                {
-                    package.VersionDownloadCount = newest.VersionDownloadCount;
-                }
-            }
-
-            currentPackages.RemoveAll(p => p.Version == package.Version);
-            currentPackages.Add(package);
-
-            session.Add(package);
 
             UpdatePackageVersionFlags(currentPackages.OrderByDescending(p => p.Version));
+        }
+
+        private void RemovePackageInternal(LucenePackage package, ISession<LucenePackage> session)
+        {
+            session.Delete(package);
+
+            var remainingPackages = from p in session.Query()
+                                    where p.Id == package.Id
+                                    orderby p.Version descending
+                                    select p;
+
+            UpdatePackageVersionFlags(remainingPackages);
         }
 
         private void UpdatePackageVersionFlags(IEnumerable<LucenePackage> packages)
@@ -304,51 +334,58 @@ namespace NuGet.Server.Infrastructure.Lucene
             }
         }
 
-        private void DownloadIncrementLoop()
-        {
-            while (!pendingDownloadIncrements.IsCompleted)
-            {
-                var items = pendingDownloadIncrements.TakeAvailable(Timeout.InfiniteTimeSpan);
-                
-                ApplyPendingDownloadIncrements(items);
-            }
-        }
+        //public IList<IPackage> PendingDownloadIncrements
+        //{
+        //    get { return new List<IPackage>(pendingUpdates); }
+        //}
 
-        public IList<IPackage> PendingDownloadIncrements
-        {
-            get { return new List<IPackage>(pendingDownloadIncrements); }
-        }
-
-        public void ApplyPendingDownloadIncrements(IList<IPackage> increments)
+        public void ApplyPendingDownloadIncrements(IList<LucenePackage> increments, ISession<LucenePackage> session)
         {
             if (increments.Count == 0) return;
 
             var byId = increments.ToLookup(p => p.Id);
 
-            lock (writeLock)
+            foreach (var grouping in byId)
             {
-                UpdateStatus(IndexingState.Commit);
-                using (var session = OpenSession())
-                {
-                    foreach (var grouping in byId)
-                    {
-                        var packages = from p in session.Query() where p.Id == grouping.Key select p;
-                        var byVersion = grouping.ToLookup(p => p.Version);
+                var packageId = grouping.Key;
+                var packages = from p in session.Query() where p.Id == packageId select p;
+                var byVersion = grouping.ToLookup(p => p.Version);
 
-                        foreach (var lucenePackage in packages)
-                        {
-                            lucenePackage.DownloadCount += grouping.Count();
-                            lucenePackage.VersionDownloadCount += byVersion[lucenePackage.Version].Count();
-                        }
-                    }
+                foreach (var lucenePackage in packages)
+                {
+                    lucenePackage.DownloadCount += grouping.Count();
+                    lucenePackage.VersionDownloadCount += byVersion[lucenePackage.Version].Count();
                 }
-                UpdateStatus(IndexingState.Idle);
             }
         }
 
-        private ISession<LucenePackage> OpenSession()
+        protected internal virtual ISession<LucenePackage> OpenSession()
         {
             return Provider.OpenSession(() => new LucenePackage(FileSystem));
+        }
+
+        private IDisposable UpdateStatus(IndexingState state, int completedPackages = 0, int packagesToIndex = 0, string currentPackagePath = null)
+        {
+            var status = new IndexingStatus
+                {
+                    State = state,
+                    CompletedPackages = completedPackages,
+                    PackagesToIndex = packagesToIndex,
+                    CurrentPackagePath = currentPackagePath
+                };
+
+            lock (indexingStatus)
+            {
+                indexingStatus.Add(status);
+            }
+
+            return new DisposableAction(() =>
+                {
+                    lock (indexingStatus)
+                    {
+                        indexingStatus.Remove(status);
+                    }
+                });
         }
     }
 }

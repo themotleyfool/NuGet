@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Lucene.Net.Linq;
 using NuGet;
 using NuGet.Server.Infrastructure.Lucene;
 using Xunit;
@@ -23,7 +24,10 @@ namespace Server.Test.Lucene
         [Fact]
         public void Apply_IncrementDownloadCountOnAllPackageVersions()
         {
-            indexer.ApplyPendingDownloadIncrements(new List<IPackage>{ MakeSamplePackage(SampleId, SampleVersion1)});
+            using (var session = OpenSession())
+            {
+                indexer.ApplyPendingDownloadIncrements(new List<LucenePackage> { MakeSamplePackage(SampleId, SampleVersion1) }, session);
+            }
 
             Assert.True(datasource.ToList().All(p => p.DownloadCount == 1));
         }
@@ -32,7 +36,11 @@ namespace Server.Test.Lucene
         public void Apply_LeavesOtherPackages()
         {
             InsertPackage(OtherSampleId, SampleVersion1);
-            indexer.ApplyPendingDownloadIncrements(new List<IPackage> { MakeSamplePackage(SampleId, SampleVersion1) });
+
+            using (var session = OpenSession())
+            {
+                indexer.ApplyPendingDownloadIncrements(new List<LucenePackage> { MakeSamplePackage(SampleId, SampleVersion1) }, session);
+            }
 
             Assert.Equal(0, GetPackage(OtherSampleId, SampleVersion1).DownloadCount);
             Assert.Equal(0, GetPackage(OtherSampleId, SampleVersion1).VersionDownloadCount);
@@ -41,8 +49,10 @@ namespace Server.Test.Lucene
         [Fact]
         public void Apply_IncrementVersionDownloadCountOnlyOnSamePackageVersion()
         {
-            indexer.ApplyPendingDownloadIncrements(new List<IPackage> { MakeSamplePackage(SampleId, SampleVersion2) });
-
+            using (var session = OpenSession())
+            {
+                indexer.ApplyPendingDownloadIncrements(new List<LucenePackage> { MakeSamplePackage(SampleId, SampleVersion2) }, session);
+            }
             Assert.Equal(0, GetPackage(SampleId, SampleVersion1).VersionDownloadCount);
             Assert.Equal(1, GetPackage(SampleId, SampleVersion2).VersionDownloadCount);
         }
@@ -51,19 +61,26 @@ namespace Server.Test.Lucene
         public void Apply_IncrementByThree()
         {
             var package = MakeSamplePackage(SampleId, SampleVersion2);
-            indexer.ApplyPendingDownloadIncrements(new List<IPackage> { package, package, package });
-
+            using (var session = OpenSession())
+            {
+                indexer.ApplyPendingDownloadIncrements(new List<LucenePackage> {package, package, package}, session);
+            }
             Assert.Equal(0, GetPackage(SampleId, SampleVersion1).VersionDownloadCount);
             Assert.Equal(3, GetPackage(SampleId, SampleVersion1).DownloadCount);
             Assert.Equal(3, GetPackage(SampleId, SampleVersion2).DownloadCount);
             Assert.Equal(3, GetPackage(SampleId, SampleVersion2).VersionDownloadCount);
         }
 
+        private ISession<LucenePackage> OpenSession()
+        {
+            return provider.OpenSession(() => new LucenePackage(fileSystem.Object));
+        }
+
         [Fact]
         public void IncrementQueuesForLater()
         {
-            indexer.IncrementDownloadCount(MakeSamplePackage(SampleId, SampleVersion1));
-            Assert.Equal(1, indexer.PendingDownloadIncrements.Count);
+            var task = indexer.IncrementDownloadCount(MakeSamplePackage(SampleId, SampleVersion1));
+            Assert.Equal(task.IsCompleted, false);
         }
 
         [Fact]
@@ -84,15 +101,6 @@ namespace Server.Test.Lucene
             Assert.Throws<InvalidOperationException>(() => indexer.IncrementDownloadCount(MakeSamplePackage(SampleId, null)));
         }
 
-        [Fact]
-        public void QueuesSameIdAndVersionTwice()
-        {
-            var package = MakeSamplePackage(SampleId, SampleVersion1);
-            indexer.IncrementDownloadCount(package);
-            indexer.IncrementDownloadCount(package);
-
-            Assert.Equal(2, indexer.PendingDownloadIncrements.Count);
-        }
         private LucenePackage GetPackage(string id, string version)
         {
             return datasource.First(p => p.Id == id && p.Version == new SemanticVersion(version));

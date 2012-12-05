@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -11,7 +12,7 @@ namespace NuGet.Server.Infrastructure
 {
     public class ServerPackageRepository : LocalPackageRepository, IServerPackageRepository
     {
-        private readonly IDictionary<IPackage, DerivedPackageData> _derivedDataLookup = new Dictionary<IPackage, DerivedPackageData>();
+        private readonly IDictionary<IPackage, DerivedPackageData> _derivedDataLookup = new ConcurrentDictionary<IPackage, DerivedPackageData>();
 
         public ServerPackageRepository(string path)
             : base(path)

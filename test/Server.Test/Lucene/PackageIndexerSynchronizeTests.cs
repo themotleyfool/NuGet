@@ -17,12 +17,15 @@ namespace Server.Test.Lucene
         {
             session = new Mock<ISession<LucenePackage>>();
             session.Setup(s => s.Query()).Returns(datasource);
+
+            indexer.FakeSession = session.Object;
+            indexer.Initialize();
         }
 
         [Fact]
         public void DoesNothingOnNoDifferences()
         {
-            indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(Empty, Empty, Empty), session.Object);
+            indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(Empty, Empty, Empty));
 
             session.Verify();
         }
@@ -34,7 +37,7 @@ namespace Server.Test.Lucene
 
             session.Setup(s => s.Delete(new TermQuery(new Term("Path", "A.nupkg")), new TermQuery(new Term("Path", "B.nupkg")))).Verifiable();
 
-            indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(Empty, missing, Empty), session.Object);
+            indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(Empty, missing, Empty));
 
             session.Verify();
         }
@@ -51,7 +54,7 @@ namespace Server.Test.Lucene
 
             session.Setup(s => s.Commit()).Verifiable();
 
-            indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(newPackages, Empty, Empty), session.Object);
+            indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(newPackages, Empty, Empty));
 
             session.VerifyAll();
         }
@@ -70,7 +73,7 @@ namespace Server.Test.Lucene
 
             session.Setup(s => s.Commit()).Verifiable();
 
-            indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(newPackages, Empty, Empty), session.Object);
+            indexer.SynchronizeIndexWithFileSystem(new IndexDifferences(newPackages, Empty, Empty));
 
             session.VerifyAll();
         }

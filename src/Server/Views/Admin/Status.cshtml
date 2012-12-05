@@ -11,6 +11,5 @@
     }
 }
 <p>Total Packages: @Model.TotalPackages</p>
-<p>Pending Deletes: @Model.PendingDeletes</p>
-<p>Optimized: @(Model.IsOptimized ? "Yes" : "No")</p>
+<p>Optimized: @(Model.IsOptimized ? "Yes" : "No") / Pending Deletes: @(Model.PendingDeletes > 0 ? "Yes" : "No")</p>
 <p>Index Last Modified: @Model.LastModification.ToString("r")</p>
