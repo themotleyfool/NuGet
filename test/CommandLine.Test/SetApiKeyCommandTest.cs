@@ -1,4 +1,5 @@
-﻿using Moq;
+﻿using System;
+using Moq;
 using NuGet.Commands;
 using NuGet.Common;
 using Xunit;
@@ -22,6 +23,20 @@ namespace NuGet.Test
 
             // Act and Assert
             ExceptionAssert.ThrowsArgNull(() => new SetApiKeyCommand(packageSourceProvider.Object, settings: null), "settings");
+        }
+
+        [Fact]
+        public void SetApiKeyThrowsIfSettingsFileIsNullSettings()
+        {
+            // Arrange
+            var packageSourceProvider = new Mock<IPackageSourceProvider>();
+            var command = new SetApiKeyCommand(packageSourceProvider.Object, settings: NullSettings.Instance);
+            command.Arguments.Add("foo");
+
+            // Act and Assert
+            ExceptionAssert.Throws<InvalidOperationException>(
+                () => command.Execute(), 
+                "\"SetValue\" cannot be called on a NullSettings. This may be caused on account of insufficient permissions to read or write to \"%AppData%\\NuGet\\NuGet.config\".");
         }
 
         [Fact]

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -13,18 +14,20 @@ namespace NuGet
     {
         private const string StoreFilePath = "repositories.config";
         private readonly PackageReferenceFile _packageReferenceFile;
+        private readonly IFileSystem _storeFileSystem;
 
         public SharedPackageRepository(string path)
             : base(path)
         {
-        }
-
-        public SharedPackageRepository(IPackagePathResolver pathResolver, IFileSystem fileSystem)
-            : base(pathResolver, fileSystem)
-        {
+            _storeFileSystem = FileSystem;
         }
 
         public SharedPackageRepository(IPackagePathResolver resolver, IFileSystem fileSystem, IFileSystem configSettingsFileSystem)
+            : this(resolver, fileSystem, fileSystem, configSettingsFileSystem)
+        {
+        }
+
+        public SharedPackageRepository(IPackagePathResolver resolver, IFileSystem fileSystem, IFileSystem storeFileSystem, IFileSystem configSettingsFileSystem)
             : base(resolver, fileSystem)
         {
             if (configSettingsFileSystem == null)
@@ -32,6 +35,7 @@ namespace NuGet
                 throw new ArgumentNullException("configSettingsFileSystem");
             }
 
+            _storeFileSystem = storeFileSystem ?? fileSystem;
             _packageReferenceFile = new PackageReferenceFile(configSettingsFileSystem, Constants.PackageReferenceFile);
         }
 
@@ -141,6 +145,15 @@ namespace NuGet
             // for example, for jQuery version 1.0, it will be "jQuery.1.0\\jQuery.1.0.nuspec"
             string packageFilePath = GetManifestFilePath(package);
             Manifest manifest = Manifest.Create(package);
+            
+            // The IPackage object doesn't carry the References information. 
+            // Thus we set the References for the manifest to the set of all valid assembly references
+            
+            manifest.Metadata.References = package.AssemblyReferences
+                                                  .Select(p => new ManifestReference() { File = p.Name })
+                                                  .Distinct()
+                                                  .ToList();
+
             FileSystem.AddFileWithCheck(packageFilePath, stream => manifest.Save(stream));
 
             // But in order to maintain backwards compatibility with older versions of NuGet, 
@@ -177,7 +190,11 @@ namespace NuGet
 
         protected override IPackage OpenPackage(string path)
         {
-            if (path.EndsWith(Constants.ManifestExtension, StringComparison.OrdinalIgnoreCase))
+            // We could either be passed in manifest path or the path to the nupkg. The manifest path ensures that the calling code has already verified the existence of the 
+            // manifest and we can return an UnzippedPackageRepository. If the caller passed in a nupkg, we'll quickly verify if a manifest exists alongside.
+            string extension = Path.GetExtension(path);
+            if (extension.Equals(Constants.ManifestExtension, StringComparison.OrdinalIgnoreCase) ||
+                FileSystem.FileExists(Path.ChangeExtension(path, Constants.ManifestExtension)))
             {
                 return new UnzippedPackage(FileSystem, Path.GetDirectoryName(path));
             }
@@ -277,7 +294,7 @@ namespace NuGet
                 // No more entries so remove the file
                 if (!document.Root.HasElements)
                 {
-                    FileSystem.DeleteFile(StoreFilePath);
+                    _storeFileSystem.DeleteFile(StoreFilePath);
                 }
                 else
                 {
@@ -317,7 +334,7 @@ namespace NuGet
             // Re-add them sorted
             repositoryElements.ForEach(e => document.Root.Add(e));
 
-            FileSystem.AddFile(StoreFilePath, document.Save);
+            _storeFileSystem.AddFile(StoreFilePath, document.Save);
         }
 
         private XDocument GetStoreDocument(bool createIfNotExists = false)
@@ -325,9 +342,9 @@ namespace NuGet
             try
             {
                 // If the file exists then open and return it
-                if (FileSystem.FileExists(StoreFilePath))
+                if (_storeFileSystem.FileExists(StoreFilePath))
                 {
-                    using (Stream stream = FileSystem.OpenFile(StoreFilePath))
+                    using (Stream stream = _storeFileSystem.OpenFile(StoreFilePath))
                     {
                         try
                         {
@@ -354,7 +371,7 @@ namespace NuGet
                 throw new InvalidOperationException(
                     String.Format(CultureInfo.CurrentCulture,
                                   NuGetResources.ErrorReadingFile,
-                                  FileSystem.GetFullPath(StoreFilePath)), e);
+                                  _storeFileSystem.GetFullPath(StoreFilePath)), e);
             }
         }
 

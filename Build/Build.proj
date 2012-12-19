@@ -37,7 +37,7 @@
 
     <PropertyGroup>
         <MajorVersion>2</MajorVersion>
-        <MinorVersion>1</MinorVersion>
+        <MinorVersion>2</MinorVersion>
         <!-- Ensure that we come up with a new version every 65535 years -->
         <VersionStartYear>2010</VersionStartYear>
 
@@ -92,8 +92,8 @@
     </ItemGroup>
 
     <Target Name="Go"
-        DependsOnTargets="CheckFxCop; UpdateVsixVersion; RestorePackages; Build; 
-                                    ReportFxCopResults; RunTests; CreateDropDirectories; CopyExecutableOutputToDropDirectory; 
+        DependsOnTargets="CheckFxCop; UpdateVsixVersion; RestorePackages; Build; ReportFxCopResults;
+                                    VerifyAssembliesInVsix; RunTests; CreateDropDirectories; CopyExecutableOutputToDropDirectory; 
                                     CopyBootStrapperOutputToDropDirectory; CopyServerExtensionsOutputToDropDirectory;
                                     CopyVisualStudioAddInOutputToDropDirectory; CopyEndToEndTestsToDropDirectory;
                                     CopyServerOutputToDropDirectory; CopyLicenseToAllDirectories; BuildPackages">
@@ -128,6 +128,25 @@
 
     <Target Name="Build">
         <MSBuild Projects="$(NuGetRoot)\NuGet.sln" Targets="Build" Properties="EnableCodeAnalysis=true" />
+    </Target>
+
+    <Target Name="VerifyAssembliesInVSIX">
+        <PropertyGroup>
+            <VsixFileLocation>$(VisualStudioAddInBuildDirectory)\NuGet.Tools.vsix</VsixFileLocation>
+            <TempVsixDirectory>$(DropDirectory)\Temp</TempVsixDirectory>
+        </PropertyGroup>
+
+        <RemoveDir Directories="$(TempVsixDirectory)" Condition="Exists($(TempVsixDirectory))" />
+
+        <Exec Command="&quot;$(ZipExe)&quot; x -o&quot;$(TempVsixDirectory)&quot; &quot;$(VsixFileLocation)&quot;" />
+
+        <ItemGroup>
+            <VsixAssemblies Include="$(TempVsixDirectory)\*.dll" />
+        </ItemGroup>
+
+        <CheckUnexpectedAssemblies Items="@(VsixAssemblies)" />
+
+        <RemoveDir Directories="$(TempVsixDirectory)" ContinueOnError="true" />
     </Target>
 
     <Target Name="RunTests">
@@ -251,9 +270,11 @@
             <NuGetExe>$(ExeDropDirectory)\NuGet.exe</NuGetExe>
         </PropertyGroup>
 
-        <Exec Command="&quot;$(NuGetExe)&quot; pack -NoPackageAnalysis -Version $(PackageVersion)" WorkingDirectory="$(ExeDropDirectory)" />
+        <Exec Command="&quot;$(NuGetExe)&quot; pack NuGet.CommandLine.nuspec -NoPackageAnalysis -Version $(PackageVersion)" WorkingDirectory="$(ExeDropDirectory)" />
+        <Exec Command="&quot;$(NuGetExe)&quot; pack NuGet.Bootstrapper.nuspec -NoPackageAnalysis -Version $(PackageVersion)" WorkingDirectory="$(ExeDropDirectory)" />
         <Exec Command="&quot;$(NuGetExe)&quot; pack -NoPackageAnalysis -Version $(PackageVersion) -o &quot;$(ServerDropDirectory)&quot; -Build -p AdditionalSettingsImport=$(AdditionalSettingsImport) -p Configuration=Release -Symbols -exclude **\NuGet.Core.*" WorkingDirectory="$(ServerBuildDirectory)" />
         <Exec Command="&quot;$(NuGetExe)&quot; pack -NoPackageAnalysis -Version $(PackageVersion) -o &quot;$(NuGetCoreDropDirectory)&quot; -Build -Symbols -p AdditionalSettingsImport=$(AdditionalSettingsImport)" WorkingDirectory="$(NuGetCoreBuildDirectory)" />
-        <Exec Command="&quot;$(NuGetExe)&quot; pack -NoPackageAnalysis -Version $(PackageVersion) -o &quot;$(NuGetVisualStudioDropDirectory)&quot; -Build -p AdditionalSettingsImport=$(AdditionalSettingsImport)" WorkingDirectory="$(NuGetVisualStudioBuildDirectory)" />        <Exec Command="&quot;$(NuGetExe)&quot; pack -NoPackageAnalysis -Version $(PackageVersion) -o &quot;$(NuGetBuildDropDirectory)&quot;" WorkingDirectory="$(NuGetSrcRoot)\Build" />
+        <Exec Command="&quot;$(NuGetExe)&quot; pack -NoPackageAnalysis -Version $(PackageVersion) -o &quot;$(NuGetBuildDropDirectory)&quot;" WorkingDirectory="$(NuGetSrcRoot)\Build" />
+        <Exec Command="&quot;$(NuGetExe)&quot; pack -NoPackageAnalysis -Version $(PackageVersion) -o &quot;$(NuGetVisualStudioDropDirectory)&quot; -Build -p AdditionalSettingsImport=$(AdditionalSettingsImport)" WorkingDirectory="$(NuGetVisualStudioBuildDirectory)" />
     </Target>
 </Project>

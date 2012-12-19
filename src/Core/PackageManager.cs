@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Runtime.Versioning;
 using NuGet.Resources;
@@ -280,7 +281,7 @@ namespace NuGet
             }
 
             OnRemoveFiles(args);
-            // Remove package to the repository
+            
             LocalRepository.RemovePackage(package);
 
             Logger.Log(MessageLevel.Info, NuGetResources.Log_SuccessfullyUninstalledPackage, package.GetFullName());

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Management.Automation;
 using System.Management.Automation.Runspaces;
 using System.Runtime.Versioning;
@@ -24,17 +25,20 @@ namespace NuGet.PowerShell.Commands
         private readonly Dictionary<IProjectManager, Project> _projectManagerToProject = new Dictionary<IProjectManager, Project>();
         private string _readmeFile;
         private readonly IVsCommonOperations _vsCommonOperations;
+        private readonly IDeleteOnRestartManager _deleteOnRestartManager;
         private IDisposable _expandedNodesDisposable;
 
         protected ProcessPackageBaseCommand(
             ISolutionManager solutionManager, 
             IVsPackageManagerFactory packageManagerFactory, 
             IHttpClientEvents httpClientEvents,
-            IVsCommonOperations vsCommonOperations)
+            IVsCommonOperations vsCommonOperations,
+            IDeleteOnRestartManager deleteOnRestartManager)
             : base(solutionManager, packageManagerFactory, httpClientEvents)
         {
             Debug.Assert(vsCommonOperations != null);
             _vsCommonOperations = vsCommonOperations;
+            _deleteOnRestartManager = deleteOnRestartManager;
         }
 
         [Parameter(Mandatory = true, ValueFromPipelineByPropertyName = true, Position = 0)]
@@ -101,6 +105,16 @@ namespace NuGet.PowerShell.Commands
             {
                 projectManager.PackageReferenceAdded -= OnPackageReferenceAdded;
                 projectManager.PackageReferenceRemoving -= OnPackageReferenceRemoving;
+            }
+
+            IList<string> packageDirectoriesMarkedForDeletion = _deleteOnRestartManager.GetPackageDirectoriesMarkedForDeletion();
+            if (packageDirectoriesMarkedForDeletion != null && packageDirectoriesMarkedForDeletion.Count != 0)
+            {
+                var message = string.Format(
+                    CultureInfo.CurrentCulture,
+                    VsResources.RequestRestartToCompleteUninstall,
+                    string.Join(", ", packageDirectoriesMarkedForDeletion));
+                WriteWarning(message);
             }
 
             WriteLine();

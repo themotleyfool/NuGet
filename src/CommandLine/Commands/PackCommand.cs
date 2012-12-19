@@ -105,6 +105,9 @@ namespace NuGet.Commands
 
             Console.WriteLine(NuGetResources.PackageCommandAttemptingToBuildPackage, Path.GetFileName(path));
 
+            // If the BasePath is not specified, use the directory of the input file (nuspec / proj) file
+            BasePath = String.IsNullOrEmpty(BasePath) ? Path.GetDirectoryName(Path.GetFullPath(path)) : BasePath;
+
             IPackage package = BuildPackage(path);
             if (package != null && !NoPackageAnalysis)
             {
@@ -112,7 +115,7 @@ namespace NuGet.Commands
             }
         }
 
-        private IPackage BuildPackage(string path, PackageBuilder builder, string outputPath = null)
+        private IPackage BuildPackage(PackageBuilder builder, string outputPath = null)
         {
             if (!String.IsNullOrEmpty(Version))
             {
@@ -121,8 +124,6 @@ namespace NuGet.Commands
 
             outputPath = outputPath ?? GetOutputPath(builder);
 
-            // If the BasePath is not specified, use the directory of the input file (nuspec / proj) file
-            BasePath = String.IsNullOrEmpty(BasePath) ? Path.GetDirectoryName(Path.GetFullPath(path)) : BasePath;
             ExcludeFiles(builder.Files);
             // Track if the package file was already present on disk
             bool isExistingPackage = File.Exists(outputPath);
@@ -276,7 +277,7 @@ namespace NuGet.Commands
                 }
             }
 
-            IPackage package = BuildPackage(path, packageBuilder);
+            IPackage package = BuildPackage(packageBuilder);
 
             if (Symbols)
             {
@@ -299,7 +300,7 @@ namespace NuGet.Commands
             }
 
             string outputPath = GetOutputPath(symbolsBuilder, symbols: true);
-            BuildPackage(path, symbolsBuilder, outputPath);
+            BuildPackage(symbolsBuilder, outputPath);
         }
 
         internal static void ExcludeFilesForLibPackage(ICollection<IPackageFile> files)
@@ -332,24 +333,18 @@ namespace NuGet.Commands
 
         private IPackage BuildFromProjectFile(string path)
         {
-            var factory = new ProjectFactory(path)
+            var factory = new ProjectFactory(path, Properties)
             {
                 IsTool = Tool,
                 Logger = Console,
                 Build = Build,
             };
 
-            // Add the additional Properties to the properties of the Project Factory
-            foreach (var property in Properties)
-            {
-                factory.Properties.Add(property.Key, property.Value);
-            }
-
             // Create a builder for the main package as well as the sources/symbols package
             PackageBuilder mainPackageBuilder = factory.CreateBuilder(BasePath);
 
             // Build the main package
-            IPackage package = BuildPackage(path, mainPackageBuilder);
+            IPackage package = BuildPackage(mainPackageBuilder);
 
             // If we're excluding symbols then do nothing else
             if (!Symbols)
@@ -366,7 +361,7 @@ namespace NuGet.Commands
 
             // Get the file name for the sources package and build it
             string outputPath = GetOutputPath(symbolsBuilder, symbols: true);
-            BuildPackage(path, symbolsBuilder, outputPath);
+            BuildPackage(symbolsBuilder, outputPath);
 
             // this is the real package, not the symbol package
             return package;
@@ -418,16 +413,7 @@ namespace NuGet.Commands
 
         private string GetInputFile()
         {
-            IEnumerable<string> files;
-
-            if (Arguments.Any())
-            {
-                files = Arguments;
-            }
-            else
-            {
-                files = Directory.GetFiles(Directory.GetCurrentDirectory());
-            }
+            IEnumerable<string> files = Arguments.Any() ? Arguments : Directory.GetFiles(Directory.GetCurrentDirectory());
 
             return GetInputFile(files);
         }

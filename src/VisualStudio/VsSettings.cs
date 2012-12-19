@@ -174,6 +174,11 @@ namespace NuGet.VisualStudio
         {
             public IFileSystem GetFileSystem(string path)
             {
+                return GetFileSystem(path, ignoreSourceControlSetting: false);
+            }
+
+            public IFileSystem GetFileSystem(string path, bool ignoreSourceControlSetting)
+            {
                 return new PhysicalFileSystem(path);
             }
         }

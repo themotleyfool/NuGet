@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
 using Moq;
 using NuGet.Commands;
 using NuGet.Common;
@@ -114,6 +115,42 @@ namespace NuGet.Test.NuGetCommandLine.Commands
 
             // Assert
             Assert.Equal(@"C:\This\Is\My\Install\Path", installPath);
+        }
+
+        [Fact]
+        public void InstallCommandUsesCredentialsFromSolutionDotNuGetConfigFileIfSpecified()
+        {
+            // Arrange
+            var fileSystem = GetFileSystemWithConfigWithCredential();
+            var installCommand = new Mock<TestInstallCommand>(
+                GetFactory(), GetSourceProvider(), fileSystem, null, null, null, Settings.LoadDefaultSettings(fileSystem))
+                {
+                    CallBase = true
+                };
+            installCommand.Object.Console = new MockConsole();
+            installCommand.Object.SolutionDirectory = @"C:\My\Solution";
+            installCommand.Setup(c => c.CreateFileSystem(@"C:\My\Solution")).Returns(fileSystem);
+
+            // Act
+            string installPath = installCommand.Object.ResolveInstallPath();
+
+            // Assert
+            var enabledPackageSource = installCommand
+                .Object
+                .SourceProvider
+                .GetEnabledPackageSources()
+                .SingleOrDefault(src => src.Name.Equals("__ATESTREPO__"));
+            Assert.NotNull(enabledPackageSource);
+            Assert.Equal("user", enabledPackageSource.UserName);
+            Assert.Equal("123abc", enabledPackageSource.Password);
+            var creds = HttpClient.DefaultCredentialProvider.GetCredentials(
+                uri: new Uri("http://www.myprivatefeed.example/"),
+                proxy: null,
+                credentialType: CredentialType.RequestCredentials, 
+                retrying: false).GetCredential(null, null);
+            Assert.NotNull(creds);
+            Assert.Equal("user", creds.UserName);
+            Assert.Equal("123abc", creds.Password);
         }
 
         [Fact]
@@ -496,6 +533,7 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             var repository = new Mock<LocalPackageRepository>(new DefaultPackagePathResolver(fileSystem, useSideBySidePaths: false), fileSystem) { CallBase = true };
             repository.Setup(c => c.GetPackages()).Returns(packages.AsQueryable());
             repository.Setup(c => c.Exists("Baz", new SemanticVersion("0.4"))).Returns(true);
+            repository.Setup(c => c.FindPackagesById("Baz")).Returns(packages);
             repository.Setup(c => c.AddPackage(It.IsAny<IPackage>())).Callback<IPackage>(c => packages.Add(c)).Verifiable();
             repository.Setup(c => c.RemovePackage(It.IsAny<IPackage>())).Callback<IPackage>(c => packages.Remove(c)).Verifiable();
 
@@ -524,7 +562,7 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             var fileSystem = new MockFileSystem();
             var packages = new[] { PackageUtility.CreatePackage("A", "0.5") };
             var repository = new Mock<LocalPackageRepository>(new DefaultPackagePathResolver(fileSystem, useSideBySidePaths: false), fileSystem) { CallBase = true };
-            repository.Setup(c => c.GetPackages()).Returns(packages.AsQueryable());
+            repository.Setup(c => c.FindPackagesById("A")).Returns(packages);
             repository.Setup(c => c.AddPackage(It.IsAny<IPackage>())).Throws(new Exception("Method should not be called"));
             repository.Setup(c => c.RemovePackage(It.IsAny<IPackage>())).Throws(new Exception("Method should not be called"));
 
@@ -570,10 +608,10 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             packageManager.SetupGet(p => p.SourceRepository).Returns(repository);
             var repositoryFactory = new Mock<IPackageRepositoryFactory>();
             repositoryFactory.Setup(r => r.CreateRepository("My Source")).Returns(repository);
-            var packageSourceProvider = new Mock<IPackageSourceProvider>(MockBehavior.Strict);
+            var packageSourceProvider = Mock.Of<IPackageSourceProvider>();
 
             // Act
-            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider.Object, fileSystem, packageManager.Object);
+            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider, fileSystem, packageManager.Object);
             installCommand.Arguments.Add(@"X:\test\packages.config");
             installCommand.Execute();
 
@@ -603,10 +641,10 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             packageManager.SetupGet(p => p.SourceRepository).Returns(repository);
             var repositoryFactory = new Mock<IPackageRepositoryFactory>();
             repositoryFactory.Setup(r => r.CreateRepository("My Source")).Returns(repository);
-            var packageSourceProvider = new Mock<IPackageSourceProvider>(MockBehavior.Strict);
+            var packageSourceProvider = Mock.Of<IPackageSourceProvider>();
 
             // Act
-            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider.Object, fileSystem, packageManager.Object)
+            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider, fileSystem, packageManager.Object)
             {
                 Console = new MockConsole()
             };
@@ -637,10 +675,10 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             packageManager.Setup(p => p.InstallPackage(package, true, true)).Verifiable();
             var repositoryFactory = new Mock<IPackageRepositoryFactory>();
             repositoryFactory.Setup(r => r.CreateRepository("My Source")).Returns(repository);
-            var packageSourceProvider = new Mock<IPackageSourceProvider>(MockBehavior.Strict);
+            var packageSourceProvider = Mock.Of<IPackageSourceProvider>();
             var console = new MockConsole();
 
-            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider.Object, fileSystem, packageManager.Object, allowPackageRestore: false);
+            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider, fileSystem, packageManager.Object, allowPackageRestore: false);
             installCommand.Arguments.Add(@"X:\test\packages.config");
             installCommand.Console = console;
 
@@ -669,10 +707,10 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             packageManager.SetupGet(p => p.SourceRepository).Returns(repository);
             var repositoryFactory = new Mock<IPackageRepositoryFactory>();
             repositoryFactory.Setup(r => r.CreateRepository("My Source")).Returns(repository);
-            var packageSourceProvider = new Mock<IPackageSourceProvider>(MockBehavior.Strict);
+            var packageSourceProvider = Mock.Of<IPackageSourceProvider>();
             var console = new MockConsole();
 
-            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider.Object, fileSystem, packageManager.Object, allowPackageRestore: false);
+            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider, fileSystem, packageManager.Object, allowPackageRestore: false);
             installCommand.Arguments.Add(@"X:\test\packages.config");
             installCommand.Console = console;
             installCommand.RequireConsent = true;
@@ -718,10 +756,10 @@ namespace NuGet.Test.NuGetCommandLine.Commands
             packageManager.SetupGet(p => p.SourceRepository).Returns(repository);
             var repositoryFactory = new Mock<IPackageRepositoryFactory>();
             repositoryFactory.Setup(r => r.CreateRepository("My Source")).Returns(repository);
-            var packageSourceProvider = new Mock<IPackageSourceProvider>(MockBehavior.Strict);
+            var packageSourceProvider = Mock.Of<IPackageSourceProvider>();
 
             // Act
-            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider.Object, fileSystem, packageManager.Object);
+            var installCommand = new TestInstallCommand(repositoryFactory.Object, packageSourceProvider, fileSystem, packageManager.Object);
             installCommand.Arguments.Add(@"X:\test\packages.config");
             installCommand.Execute();
 
@@ -815,6 +853,28 @@ namespace NuGet.Test.NuGetCommandLine.Commands
         <add key=""repositorypath"" value=""{0}"" />
     </config>
 </configuration>", repositoryPath));
+            return fileSystem;
+        }
+
+        private static IFileSystem GetFileSystemWithConfigWithCredential()
+        {
+            var fileSystem = new MockFileSystem(@"C:\This\Is\My\Install\Path\.nuget");
+            fileSystem.AddFile("nuget.config",
+@"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+  <solution>
+    <add key=""disableSourceControlIntegration"" value=""true"" />
+  </solution>
+  <packageSources>
+    <add key=""__ATESTREPO__"" value=""http://www.myprivatefeed.example/"" />
+  </packageSources>
+  <packageSourceCredentials>
+      <__ATESTREPO__>
+          <add key=""Username"" value=""user"" />
+          <add key=""Password"" value=""" + EncryptionUtility.EncryptString("123abc") + @""" />
+      </__ATESTREPO__>
+  </packageSourceCredentials>
+</configuration>");
             return fileSystem;
         }
 

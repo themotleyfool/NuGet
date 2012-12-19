@@ -104,6 +104,8 @@ namespace NuGet.Dialog.Providers
 
         public bool SuppressNextRefresh { get; private set; }
 
+        internal bool SuppressLoad { get; set; }
+
         /// <summary>
         /// Gets the root node of the tree
         /// </summary>
@@ -243,7 +245,7 @@ namespace NuGet.Dialog.Providers
             return _searchNode;
         }
 
-        private void RemoveSearchNode()
+        protected internal virtual void RemoveSearchNode()
         {
             if (_searchNode != null)
             {

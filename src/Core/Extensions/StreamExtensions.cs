@@ -38,8 +38,15 @@ namespace NuGet
 
             using (var ms = new MemoryStream())
             {
-                stream.CopyTo(ms);
-                buffer = ms.ToArray();
+                try
+                {
+                    stream.CopyTo(ms);
+                    buffer = ms.ToArray();
+                }
+                finally 
+                {
+                    stream.Close();
+                }
             }
 
             return () => new MemoryStream(buffer);

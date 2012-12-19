@@ -39,7 +39,7 @@ namespace NuGet.VisualStudio
             {
                 return (bool)o;
             }
-            return (o is int) ? (int)o != 0 : false;
+            return (o is int) && (int)o != 0;
         }
 
         public IVsUIHierarchy UIHierarchy()
@@ -105,10 +105,17 @@ namespace NuGet.VisualStudio
                 VsHierarchyItem child = GetFirstChild(fVisible);
                 while (child != null)
                 {
-                    int returnVal = child.WalkDepthFirst(fVisible, processCallback, newCallerObject);
-                    if (returnVal == -1)
+                    object isNonMemberItemValue = child.GetProperty(__VSHPROPID.VSHPROPID_IsNonMemberItem);
+                    // Some project systems (e.g. F#) don't support querying for the VSHPROPID_IsNonMemberItem property. 
+                    // In that case, we treat this child as belonging to the project
+                    bool isMemberOfProject = isNonMemberItemValue == null || (bool)isNonMemberItemValue == false;
+                    if (isMemberOfProject)
                     {
-                        return returnVal;
+                        int returnVal = child.WalkDepthFirst(fVisible, processCallback, newCallerObject);
+                        if (returnVal == -1)
+                        {
+                            return returnVal;
+                        }
                     }
                     child = child.GetNextSibling(fVisible);
                 }
@@ -128,15 +135,7 @@ namespace NuGet.VisualStudio
 
         internal uint GetNextSiblingId(bool fVisible)
         {
-            object o;
-            if (fVisible)
-            {
-                o = GetProperty(__VSHPROPID.VSHPROPID_NextVisibleSibling);
-            }
-            else
-            {
-                o = GetProperty(__VSHPROPID.VSHPROPID_NextSibling);
-            }
+            object o = GetProperty(fVisible ? __VSHPROPID.VSHPROPID_NextVisibleSibling : __VSHPROPID.VSHPROPID_NextSibling);
 
             if (o is int)
             {
@@ -164,15 +163,7 @@ namespace NuGet.VisualStudio
 
         internal uint GetFirstChildId(bool fVisible)
         {
-            object o;
-            if (fVisible)
-            {
-                o = GetProperty(__VSHPROPID.VSHPROPID_FirstVisibleChild);
-            }
-            else
-            {
-                o = GetProperty(__VSHPROPID.VSHPROPID_FirstChild);
-            }
+            object o = GetProperty(fVisible ? __VSHPROPID.VSHPROPID_FirstVisibleChild : __VSHPROPID.VSHPROPID_FirstChild);
 
             if (o is int)
             {

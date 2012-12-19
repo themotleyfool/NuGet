@@ -208,7 +208,7 @@ namespace NuGet.Commands
             var pathResolver = new DefaultPackagePathResolver(sharedRepositoryFileSystem);
 
             // Create the local and source repositories
-            var sharedPackageRepository = new SharedPackageRepository(pathResolver, sharedRepositoryFileSystem);
+            var sharedPackageRepository = new SharedPackageRepository(pathResolver, sharedRepositoryFileSystem, sharedRepositoryFileSystem);
             var localRepository = new PackageReferenceRepository(project, sharedPackageRepository);
             sourceRepository = sourceRepository ?? AggregateRepositoryHelper.CreateAggregateRepositoryFromSources(RepositoryFactory, SourceProvider, Source);
             IPackageConstraintProvider constraintProvider = localRepository;

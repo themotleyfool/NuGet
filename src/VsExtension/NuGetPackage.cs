@@ -1,6 +1,5 @@
 extern alias dialog;
 extern alias dialog10;
-
 using System;
 using System.ComponentModel.Design;
 using System.Diagnostics;
@@ -17,9 +16,9 @@ using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.Options;
 using NuGet.VisualStudio;
 using NuGet.VisualStudio.Resources;
+using NuGet.VisualStudio11;
 using NuGetConsole;
 using NuGetConsole.Implementation;
-
 using ManagePackageDialog = dialog::NuGet.Dialog.PackageManagerWindow;
 using VS10ManagePackageDialog = dialog10::NuGet.Dialog.PackageManagerWindow;
 
@@ -37,6 +36,7 @@ namespace NuGet.Tools
         Orientation = ToolWindowOrientation.Right)]
     [ProvideOptionPage(typeof(PackageSourceOptionsPage), "Package Manager", "Package Sources", 113, 114, true)]
     [ProvideOptionPage(typeof(GeneralOptionPage), "Package Manager", "General", 113, 115, true)]
+    [ProvideSearchProvider(typeof(NuGetSearchProvider), "NuGet Search")]
     [ProvideBindingPath] // Definition dll needs to be on VS binding path
     [ProvideAutoLoad(GuidList.guidAutoLoadNuGetString)]
     [FontAndColorsRegistration(
@@ -44,20 +44,24 @@ namespace NuGet.Tools
         NuGetConsole.Implementation.GuidList.GuidPackageManagerConsoleFontAndColorCategoryString,
         "{" + GuidList.guidNuGetPkgString + "}")]
     [Guid(GuidList.guidNuGetPkgString)]
-    public sealed class NuGetPackage : Package
+    public sealed class NuGetPackage : Package, IVsPackageExtensionProvider
     {
         // This product version will be updated by the build script to match the daily build version.
         // It is displayed in the Help - About box of Visual Studio
-        public const string ProductVersion = "2.1.0.0";
+        public const string ProductVersion = "2.2.0.0";
         private static readonly string[] _visualizerSupportedSKUs = new[] { "Premium", "Ultimate" };
 
-        private uint _debuggingContextCookie, _solutionBuildingContextCookie;
+        private uint _solutionNotBuildingAndNotDebuggingContextCookie;
         private DTE _dte;
         private IConsoleStatus _consoleStatus;
         private IVsMonitorSelection _vsMonitorSelection;
         private bool? _isVisualizerSupported;
         private IPackageRestoreManager _packageRestoreManager;
         private ISolutionManager _solutionManager;
+        private IDeleteOnRestartManager _deleteOnRestart;
+        private OleMenuCommand _managePackageDialogCommand;
+        private OleMenuCommand _managePackageForSolutionDialogCommand;
+        private OleMenuCommandService _mcs;
 
         public NuGetPackage()
         {
@@ -73,13 +77,9 @@ namespace NuGet.Tools
                     // get the UI context cookie for the debugging mode
                     _vsMonitorSelection = (IVsMonitorSelection)GetService(typeof(IVsMonitorSelection));
 
-                    // get debugging context cookie
-                    Guid debuggingContextGuid = VSConstants.UICONTEXT_Debugging;
-                    _vsMonitorSelection.GetCmdUIContextCookie(ref debuggingContextGuid, out _debuggingContextCookie);
-
-                    // get the solution building cookie
-                    Guid solutionBuildingContextGuid = VSConstants.UICONTEXT_SolutionBuilding;
-                    _vsMonitorSelection.GetCmdUIContextCookie(ref solutionBuildingContextGuid, out _solutionBuildingContextCookie);
+                    // get the solution not building and not debugging cookie
+                    Guid guid = VSConstants.UICONTEXT.SolutionExistsAndNotBuildingAndNotDebugging_guid;
+                    _vsMonitorSelection.GetCmdUIContextCookie(ref guid, out _solutionNotBuildingAndNotDebuggingContextCookie);
                 }
                 return _vsMonitorSelection;
             }
@@ -125,6 +125,20 @@ namespace NuGet.Tools
             }
         }
 
+        private IDeleteOnRestartManager DeleteOnRestart
+        {
+            get
+            {
+                if (_deleteOnRestart == null)
+                {
+                    _deleteOnRestart = ServiceLocator.GetInstance<IDeleteOnRestartManager>();
+                    Debug.Assert(_deleteOnRestart != null);
+                }
+
+                return _deleteOnRestart;
+            }
+        }
+
         /// <summary>
         /// Initialization of the package; this method is called right after the package is sited, so this is the place
         /// where you can put all the initialization code that rely on services provided by VisualStudio.
@@ -156,49 +170,63 @@ namespace NuGet.Tools
             // the <Import> element added.
             if (PackageRestoreManager.IsCurrentSolutionEnabledForRestore)
             {
-                _packageRestoreManager.EnableCurrentSolutionForRestore(fromActivation: false);
+                PackageRestoreManager.EnableCurrentSolutionForRestore(fromActivation: false);
+            }
+
+            // when NuGet loads, if the current solution has some package 
+            // folders marked for deletion (because a previous uninstalltion didn't succeed),
+            // delete them now.
+            if (SolutionManager.IsSolutionOpen)
+            {
+                DeleteOnRestart.DeleteMarkedPackageDirectories();
             }
         }
 
         private void AddMenuCommandHandlers()
         {
-            OleMenuCommandService mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
-            if (null != mcs)
+            _mcs = GetService(typeof(IMenuCommandService)) as OleMenuCommandService;
+            if (null != _mcs)
             {
                 // menu command for opening Package Manager Console
                 CommandID toolwndCommandID = new CommandID(GuidList.guidNuGetConsoleCmdSet, PkgCmdIDList.cmdidPowerConsole);
                 MenuCommand menuToolWin = new MenuCommand(ShowToolWindow, toolwndCommandID);
-                mcs.AddCommand(menuToolWin);
+                _mcs.AddCommand(menuToolWin);
 
                 // menu command for opening Manage NuGet packages dialog
                 CommandID managePackageDialogCommandID = new CommandID(GuidList.guidNuGetDialogCmdSet, PkgCmdIDList.cmdidAddPackageDialog);
-                OleMenuCommand managePackageDialogCommand = new OleMenuCommand(ShowManageLibraryPackageDialog, null, BeforeQueryStatusForAddPackageDialog, managePackageDialogCommandID);
-                mcs.AddCommand(managePackageDialogCommand);
+                _managePackageDialogCommand = new OleMenuCommand(ShowManageLibraryPackageDialog, null, BeforeQueryStatusForAddPackageDialog, managePackageDialogCommandID);
+                // ‘$’ - This indicates that the input line other than the argument forms a single argument string with no autocompletion
+                //       Autocompletion for filename(s) is supported for option 'p' or 'd' which is not applicable for this command
+                _managePackageDialogCommand.ParametersDescription = "$";
+                _mcs.AddCommand(_managePackageDialogCommand);
 
                 // menu command for opening "Manage NuGet packages for solution" dialog
                 CommandID managePackageForSolutionDialogCommandID = new CommandID(GuidList.guidNuGetDialogCmdSet, PkgCmdIDList.cmdidAddPackageDialogForSolution);
-                OleMenuCommand managePackageForSolutionDialogCommand = new OleMenuCommand(ShowManageLibraryPackageForSolutionDialog, null, BeforeQueryStatusForAddPackageForSolutionDialog, managePackageForSolutionDialogCommandID);
-                mcs.AddCommand(managePackageForSolutionDialogCommand);
+                _managePackageForSolutionDialogCommand = new OleMenuCommand(ShowManageLibraryPackageForSolutionDialog, null, BeforeQueryStatusForAddPackageForSolutionDialog, managePackageForSolutionDialogCommandID);
+                // ‘$’ - This indicates that the input line other than the argument forms a single argument string with no autocompletion
+                //       Autocompletion for filename(s) is supported for option 'p' or 'd' which is not applicable for this command
+                _managePackageForSolutionDialogCommand.ParametersDescription = "$";
+                _mcs.AddCommand(_managePackageForSolutionDialogCommand);
 
                 // menu command for opening Package Source settings options page
                 CommandID settingsCommandID = new CommandID(GuidList.guidNuGetConsoleCmdSet, PkgCmdIDList.cmdidSourceSettings);
                 OleMenuCommand settingsMenuCommand = new OleMenuCommand(ShowPackageSourcesOptionPage, settingsCommandID);
-                mcs.AddCommand(settingsMenuCommand);
+                _mcs.AddCommand(settingsMenuCommand);
 
                 // menu command for opening General options page
                 CommandID generalSettingsCommandID = new CommandID(GuidList.guidNuGetToolsGroupCmdSet, PkgCmdIDList.cmdIdGeneralSettings);
                 OleMenuCommand generalSettingsCommand = new OleMenuCommand(ShowGeneralSettingsOptionPage, generalSettingsCommandID);
-                mcs.AddCommand(generalSettingsCommand);
+                _mcs.AddCommand(generalSettingsCommand);
 
                 // menu command for Package Visualizer
                 CommandID visualizerCommandID = new CommandID(GuidList.guidNuGetToolsGroupCmdSet, PkgCmdIDList.cmdIdVisualizer);
                 OleMenuCommand visualizerCommand = new OleMenuCommand(ExecuteVisualizer, null, QueryStatusForVisualizer, visualizerCommandID);
-                mcs.AddCommand(visualizerCommand);
+                _mcs.AddCommand(visualizerCommand);
 
                 // menu command for Package Restore command
                 CommandID restorePackagesCommandID = new CommandID(GuidList.guidNuGetPackagesRestoreCmdSet, PkgCmdIDList.cmdidRestorePackages);
                 var restorePackagesCommand = new OleMenuCommand(EnablePackagesRestore, null, QueryStatusEnablePackagesRestore, restorePackagesCommandID);
-                mcs.AddCommand(restorePackagesCommand);
+                _mcs.AddCommand(restorePackagesCommand);
             }
         }
 
@@ -230,31 +258,32 @@ namespace NuGet.Tools
 
         private void ShowManageLibraryPackageDialog(object sender, EventArgs e)
         {
+            string parameterString = null;
+            OleMenuCmdEventArgs args = e as OleMenuCmdEventArgs;
+            if (null != args)
+            {
+                parameterString = args.InValue as string;
+            }
+
             if (VsMonitorSelection.GetIsSolutionNodeSelected())
             {
-                ShowManageLibraryPackageDialog(null);
+                ShowManageLibraryPackageDialog(null, parameterString);
             }
             else
             {
                 Project project = VsMonitorSelection.GetActiveProject();
                 if (project != null && !project.IsUnloaded() && project.IsSupported())
                 {
-                    ShowManageLibraryPackageDialog(project);
+                    ShowManageLibraryPackageDialog(project, parameterString);
                 }
                 else
                 {
                     // show error message when no supported project is selected.
                     string projectName = project != null ? project.Name : String.Empty;
 
-                    string errorMessage;
-                    if (String.IsNullOrEmpty(projectName))
-                    {
-                        errorMessage = Resources.NoProjectSelected;
-                    }
-                    else
-                    {
-                        errorMessage = String.Format(CultureInfo.CurrentCulture, VsResources.DTE_ProjectUnsupported, projectName);
-                    }
+                    string errorMessage = String.IsNullOrEmpty(projectName) 
+                        ? Resources.NoProjectSelected 
+                        : String.Format(CultureInfo.CurrentCulture, VsResources.DTE_ProjectUnsupported, projectName);
 
                     MessageHelper.ShowWarningMessage(errorMessage, Resources.ErrorDialogBoxTitle);
                 }
@@ -263,14 +292,20 @@ namespace NuGet.Tools
 
         private void ShowManageLibraryPackageForSolutionDialog(object sender, EventArgs e)
         {
-            ShowManageLibraryPackageDialog(null);
+            string parameterString = null;
+            OleMenuCmdEventArgs args = e as OleMenuCmdEventArgs;
+            if (args != null)
+            {
+                parameterString = args.InValue as string;
+            }
+            ShowManageLibraryPackageDialog(null, parameterString);
         }
 
-        private static void ShowManageLibraryPackageDialog(Project project)
+        private static void ShowManageLibraryPackageDialog(Project project, string parameterString = null)
         {
             DialogWindow window = VsVersionHelper.IsVisualStudio2010 ?
-                GetVS10PackageManagerWindow(project) :
-                GetPackageManagerWindow(project);
+                GetVS10PackageManagerWindow(project, parameterString) :
+                GetPackageManagerWindow(project, parameterString);
             try
             {
                 window.ShowModal();
@@ -283,15 +318,15 @@ namespace NuGet.Tools
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static DialogWindow GetVS10PackageManagerWindow(Project project)
+        private static DialogWindow GetVS10PackageManagerWindow(Project project, string parameterString)
         {
-            return new VS10ManagePackageDialog(project);
+            return new VS10ManagePackageDialog(project, parameterString);
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static DialogWindow GetPackageManagerWindow(Project project)
+        private static DialogWindow GetPackageManagerWindow(Project project, string parameterString)
         {
-            return new ManagePackageDialog(project);
+            return new ManagePackageDialog(project, parameterString);
         }
 
         private void EnablePackagesRestore(object sender, EventArgs args)
@@ -308,22 +343,15 @@ namespace NuGet.Tools
 
         private void BeforeQueryStatusForAddPackageDialog(object sender, EventArgs args)
         {
-            bool isSolutionSelected = VsMonitorSelection.GetIsSolutionNodeSelected();
-
             OleMenuCommand command = (OleMenuCommand)sender;
-            command.Visible = SolutionManager.IsSolutionOpen && !IsIDEInDebuggingOrBuildingContext() && (isSolutionSelected || HasActiveLoadedSupportedProject);
-            // disable the dialog menu if the console is busy executing a command;
+            command.Visible = IsSolutionExistsAndNotDebuggingAndNotBuilding() && HasActiveLoadedSupportedProject;
             command.Enabled = !ConsoleStatus.IsBusy;
-            if (command.Visible)
-            {
-                command.Text = isSolutionSelected ? Resources.ManagePackageForSolutionLabel : Resources.ManagePackageLabel;
-            }
         }
 
         private void BeforeQueryStatusForAddPackageForSolutionDialog(object sender, EventArgs args)
         {
             OleMenuCommand command = (OleMenuCommand)sender;
-            command.Visible = SolutionManager.IsSolutionOpen && !IsIDEInDebuggingOrBuildingContext();
+            command.Visible = IsSolutionExistsAndNotDebuggingAndNotBuilding();
             // disable the dialog menu if the console is busy executing a command;
             command.Enabled = !ConsoleStatus.IsBusy;
         }
@@ -334,22 +362,11 @@ namespace NuGet.Tools
             command.Visible = SolutionManager.IsSolutionOpen && IsVisualizerSupported;
         }
 
-        private bool IsIDEInDebuggingOrBuildingContext()
+        private bool IsSolutionExistsAndNotDebuggingAndNotBuilding()
         {
             int pfActive;
-            int result = VsMonitorSelection.IsCmdUIContextActive(_debuggingContextCookie, out pfActive);
-            if (result == VSConstants.S_OK && pfActive > 0)
-            {
-                return true;
-            }
-
-            result = VsMonitorSelection.IsCmdUIContextActive(_solutionBuildingContextCookie, out pfActive);
-            if (result == VSConstants.S_OK && pfActive > 0)
-            {
-                return true;
-            }
-
-            return false;
+            int result = VsMonitorSelection.IsCmdUIContextActive(_solutionNotBuildingAndNotDebuggingContextCookie, out pfActive);
+            return (result == VSConstants.S_OK && pfActive > 0);
         }
 
         private void ShowPackageSourcesOptionPage(object sender, EventArgs args)
@@ -398,6 +415,16 @@ namespace NuGet.Tools
                 }
                 return _isVisualizerSupported.Value;
             }
+        }
+
+        public dynamic CreateExtensionInstance(ref Guid extensionPoint, ref Guid instance)
+        {
+            if (instance == typeof(NuGetSearchProvider).GUID)
+            {
+                return new NuGetSearchProvider(_mcs, _managePackageDialogCommand, _managePackageForSolutionDialogCommand);
+            }
+
+            return null;
         }
     }
 }

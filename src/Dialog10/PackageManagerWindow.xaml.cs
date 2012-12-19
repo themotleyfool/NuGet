@@ -9,6 +9,7 @@ using System.Windows.Input;
 using EnvDTE;
 using Microsoft.VisualStudio.ExtensionsExplorer.UI;
 using Microsoft.VisualStudio.PlatformUI;
+using Microsoft.VisualStudio.Shell.Interop;
 using NuGet.Dialog.PackageManagerUI;
 using NuGet.Dialog.Providers;
 using NuGet.VisualStudio;
@@ -22,6 +23,9 @@ namespace NuGet.Dialog
         private const string DialogUserAgentClient = "NuGet Add Package Dialog";
         private readonly Lazy<string> _dialogUserAgent = new Lazy<string>(() => HttpUtility.CreateUserAgentString(DialogUserAgentClient));
 
+        private static readonly string[] Providers = new string[] { "Installed", "Online", "Updates" };
+        private const string SearchInSwitch = "/searchin:";
+
         private const string F1Keyword = "vs.ExtensionManager";
 
         private readonly IHttpClientEvents _httpClientEvents;
@@ -33,8 +37,9 @@ namespace NuGet.Dialog
         private readonly IProductUpdateService _productUpdateService;
         private readonly IOptionsPageActivator _optionsPageActivator;
         private readonly Project _activeProject;
+        private string _searchText;
 
-        public PackageManagerWindow(Project project) :
+        public PackageManagerWindow(Project project, string dialogParameters = null) :
             this(project,
                  ServiceLocator.GetInstance<DTE>(),
                  ServiceLocator.GetInstance<IVsPackageManagerFactory>(),
@@ -44,7 +49,10 @@ namespace NuGet.Dialog
                  ServiceLocator.GetInstance<IProductUpdateService>(),
                  ServiceLocator.GetInstance<IPackageRestoreManager>(),
                  ServiceLocator.GetInstance<ISolutionManager>(),
-                 ServiceLocator.GetInstance<IOptionsPageActivator>())
+                 ServiceLocator.GetInstance<IOptionsPageActivator>(),
+                 ServiceLocator.GetInstance<IDeleteOnRestartManager>(),
+                 ServiceLocator.GetGlobalService<SVsShell, IVsShell4>(),
+                 dialogParameters)
         {
         }
 
@@ -57,7 +65,10 @@ namespace NuGet.Dialog
                                     IProductUpdateService productUpdateService,
                                     IPackageRestoreManager packageRestoreManager,
                                     ISolutionManager solutionManager,
-                                    IOptionsPageActivator optionPageActivator)
+                                    IOptionsPageActivator optionPageActivator,
+                                    IDeleteOnRestartManager deleteOnRestartManager,
+                                    IVsShell4 vsRestarter,
+                                    string dialogParameters)
             : base(F1Keyword)
         {
 
@@ -87,6 +98,7 @@ namespace NuGet.Dialog
 
             AddUpdateBar(productUpdateService);
             AddRestoreBar(packageRestoreManager);
+            var restartRequestBar = AddRestartRequestBar(deleteOnRestartManager, vsRestarter);
             InsertDisclaimerElement();
             AdjustSortComboBoxWidth();
             PreparePrereleaseComboBox();
@@ -100,7 +112,66 @@ namespace NuGet.Dialog
                 providerServices,
                 httpClientEvents,
                 solutionManager,
-                packageRestoreManager);
+                packageRestoreManager,
+                restartRequestBar);
+
+            ProcessDialogParameters(dialogParameters);
+        }
+
+        /// <summary>
+        /// Project.ManageNuGetPackages supports 1 optional argument and 1 optional switch /searchin. /searchin Switch has to be provided at the end
+        /// If the provider specified in the optional switch is not valid, then the provider entered is ignored
+        /// </summary>
+        /// <param name="dialogParameters"></param>
+        private void ProcessDialogParameters(string dialogParameters)
+        {
+            bool providerSet = false;
+            if (dialogParameters != null)
+            {
+                dialogParameters = dialogParameters.Trim();
+                int lastIndexOfSearchInSwitch = dialogParameters.LastIndexOf(SearchInSwitch, StringComparison.OrdinalIgnoreCase);
+
+                if (lastIndexOfSearchInSwitch == -1)
+                {
+                    _searchText = dialogParameters;
+                }
+                else
+                {
+                    _searchText = dialogParameters.Substring(0, lastIndexOfSearchInSwitch);
+
+                    // At this point, we know that /searchin: exists in the string.
+                    // Check if there is content following the switch
+                    if (dialogParameters.Length > (lastIndexOfSearchInSwitch + SearchInSwitch.Length))
+                    {
+                        // At this point, we know that there is some content following the /searchin: switch
+                        // Check if it represents a valid provider. Otherwise, don't set the provider here
+                        // Note that at the end of the method the provider from the settings will be used if no valid provider was determined
+                        string provider = dialogParameters.Substring(lastIndexOfSearchInSwitch + SearchInSwitch.Length);
+                        for (int i = 0; i < Providers.Length; i++)
+                        {
+                            // Case insensitive comparisons with the strings
+                            if (String.Equals(Providers[i], provider, StringComparison.OrdinalIgnoreCase))
+                            {
+                                UpdateSelectedProvider(i);
+                                providerSet = true;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!providerSet)
+            {
+                // retrieve the selected provider from the settings
+                UpdateSelectedProvider(_providerSettings.SelectedProvider);
+            }
+
+            if (!String.IsNullOrEmpty(_searchText))
+            {
+                var selectedProvider = explorer.SelectedProvider as PackagesProviderBase;
+                selectedProvider.SuppressLoad = true;
+            }
         }
 
         private void AddUpdateBar(IProductUpdateService productUpdateService)
@@ -116,6 +187,14 @@ namespace NuGet.Dialog
             var restoreBar = new PackageRestoreBar(packageRestoreManager);
             LayoutRoot.Children.Add(restoreBar);
             restoreBar.SizeChanged += OnHeaderBarSizeChanged;
+        }
+
+        private RestartRequestBar AddRestartRequestBar(IDeleteOnRestartManager deleteOnRestartManager, IVsShell4 vsRestarter)
+        {
+            var restartRequestBar = new RestartRequestBar(deleteOnRestartManager, vsRestarter);
+            Grid.SetColumn(restartRequestBar, 1);
+            BottomBar.Children.Insert(1, restartRequestBar);
+            return restartRequestBar;
         }
 
         private void OnHeaderBarSizeChanged(object sender, SizeChangedEventArgs e)
@@ -141,7 +220,8 @@ namespace NuGet.Dialog
                                     ProviderServices providerServices,
                                     IHttpClientEvents httpClientEvents,
                                     ISolutionManager solutionManager,
-                                    IPackageRestoreManager packageRestoreManager)
+                                    IPackageRestoreManager packageRestoreManager,
+                                    RestartRequestBar restartRequestBar)
         {
 
             // This package manager is not used for installing from a remote source, and therefore does not need a fallback repository for resolving dependencies
@@ -243,8 +323,17 @@ namespace NuGet.Dialog
                 onlineProvider.IncludePrerelease =
                 updatesProvider.IncludePrerelease = _providerSettings.IncludePrereleasePackages;
 
-            // retrieve the selected provider from the settings
-            int selectedProvider = Math.Min(explorer.Providers.Count-1, _providerSettings.SelectedProvider);
+            installedProvider.ExecuteCompletedCallback =
+                onlineProvider.ExecuteCompletedCallback =
+                updatesProvider.ExecuteCompletedCallback = restartRequestBar.CheckForUnsuccessfulUninstall;
+
+            Loaded += (o, e) => restartRequestBar.CheckForUnsuccessfulUninstall();
+        }
+
+        private void UpdateSelectedProvider(int selectedProvider)
+        {
+            // update the selected provider
+            selectedProvider = Math.Min(explorer.Providers.Count - 1, selectedProvider);
             selectedProvider = Math.Max(selectedProvider, 0);
             explorer.SelectedProvider = explorer.Providers[selectedProvider];
         }
@@ -465,7 +554,8 @@ namespace NuGet.Dialog
         private void OnFxComboBoxSelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             var combo = (ComboBox)sender;
-            if (combo.SelectedIndex == -1) {
+            if (combo.SelectedIndex == -1)
+            {
                 return;
             }
 
@@ -473,7 +563,7 @@ namespace NuGet.Dialog
 
             // persist the option to VS settings store
             _providerSettings.IncludePrereleasePackages = includePrerelease;
-            
+
             // set the flags on all providers
             foreach (PackagesProviderBase provider in explorer.Providers)
             {
@@ -556,6 +646,23 @@ namespace NuGet.Dialog
         {
             // HACK: Keep track of the currently open instance of this class.
             CurrentInstance = this;
+        }
+
+        protected override void OnContentRendered(EventArgs e)
+        {
+            base.OnContentRendered(e);
+#if !VS10
+            var searchControlParent = explorer.SearchControlParent as DependencyObject;
+#else
+            var searchControlParent = explorer;
+#endif
+            var element = (TextBox)searchControlParent.FindDescendant<TextBox>();
+            if (element != null && !String.IsNullOrEmpty(_searchText))
+            {
+                var selectedProvider = explorer.SelectedProvider as PackagesProviderBase;
+                selectedProvider.SuppressLoad = false;
+                element.Text = _searchText;
+            }
         }
     }
 }

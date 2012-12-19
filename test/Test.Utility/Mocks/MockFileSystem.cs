@@ -9,6 +9,7 @@ namespace NuGet.Test.Mocks
     public class MockFileSystem : IFileSystem
     {
         private ILogger _logger;
+        private Dictionary<string, DateTime> _createdTime;
 
         public MockFileSystem()
             : this(@"C:\MockFileSystem\")
@@ -21,6 +22,7 @@ namespace NuGet.Test.Mocks
             Root = root;
             Paths = new Dictionary<string, Func<Stream>>(StringComparer.OrdinalIgnoreCase);
             Deleted = new HashSet<string>();
+            _createdTime = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
         }
 
         public virtual ILogger Logger
@@ -37,7 +39,8 @@ namespace NuGet.Test.Mocks
 
         public virtual string Root
         {
-            get; private set; 
+            get;
+            private set;
         }
 
         public virtual IDictionary<string, Func<Stream>> Paths
@@ -86,7 +89,7 @@ namespace NuGet.Test.Mocks
             {
                 files = files.Where(f => Path.GetDirectoryName(f).Equals(path, StringComparison.OrdinalIgnoreCase));
             }
-                             
+
             return files;
         }
 
@@ -96,7 +99,7 @@ namespace NuGet.Test.Mocks
             {
                 filter = "*";
             }
-            
+
             // TODO: This is just flaky. We need to make it closer to the implementation that Directory.Enumerate supports perhaps by using PathResolver.
             var files = GetFiles(path, recursive);
             if (!filter.Contains("*"))
@@ -163,20 +166,21 @@ namespace NuGet.Test.Mocks
 
         public virtual void AddFile(string path)
         {
-            AddFile(path, new MemoryStream());
+            AddFile(path, Stream.Null);
         }
 
         public void AddFile(string path, string content)
         {
             AddFile(path, content.AsStream());
         }
-            
+
         public virtual void AddFile(string path, Stream stream, bool overrideIfExists)
         {
             var ms = new MemoryStream((int)stream.Length);
             stream.CopyTo(ms);
             byte[] buffer = ms.ToArray();
             Paths[path] = () => new MemoryStream(buffer);
+            _createdTime[path] = DateTime.UtcNow;
         }
 
         public virtual void AddFile(string path, Stream stream)
@@ -191,17 +195,41 @@ namespace NuGet.Test.Mocks
 
         public virtual DateTimeOffset GetLastModified(string path)
         {
-            return DateTime.UtcNow;
+            DateTime time;
+            if (_createdTime.TryGetValue(path, out time))
+            {
+                return time;
+            }
+            else
+            {
+                return DateTime.UtcNow;
+            }
         }
 
         public virtual DateTimeOffset GetCreated(string path)
         {
-            return DateTime.UtcNow;
+            DateTime time;
+            if (_createdTime.TryGetValue(path, out time))
+            {
+                return time;
+            }
+            else
+            {
+                return DateTime.UtcNow;
+            }
         }
 
         public virtual DateTimeOffset GetLastAccessed(string path)
         {
-            return DateTime.UtcNow;
+            DateTime time;
+            if (_createdTime.TryGetValue(path, out time))
+            {
+                return time;
+            }
+            else
+            {
+                return DateTime.UtcNow;
+            }
         }
     }
 }
