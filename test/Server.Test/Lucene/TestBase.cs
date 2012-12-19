@@ -23,7 +23,7 @@ namespace Server.Test.Lucene
         protected TestBase()
         {
             packagePathResolver = new Mock<IPackagePathResolver>();
-            loader = new Mock<ILucenePackageRepository>();
+            loader = new Mock<ILucenePackageRepository>(MockBehavior.Strict);
             fileSystem = new Mock<IFileSystem>();
 
             packagePathResolver.Setup(p => p.GetPackageDirectory(It.IsAny<IPackage>())).Returns("package-dir");

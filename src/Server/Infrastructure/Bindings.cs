@@ -4,6 +4,7 @@ using Lucene.Net.Index;
 using Lucene.Net.Linq;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
+using Ninject;
 using Ninject.Modules;
 using NuGet.Server.Infrastructure.Lucene;
 using LuceneDirectory = Lucene.Net.Store.Directory;
@@ -45,8 +46,10 @@ namespace NuGet.Server.Infrastructure
             Bind<LuceneDataProvider>().ToConstant(provider);
             Bind<IPackageIndexer>().ToConstant(new PackageIndexer());
             Bind<IQueryable<LucenePackage>>().ToConstant(provider.AsQueryable(() => new LucenePackage(fileSystem)));
+            Bind<PackageFileSystemWatcher>().ToConstant(new PackageFileSystemWatcher());
 
-            Bind<IPackageFileSystemWatcher>().ToConstant(new PackageFileSystemWatcher());
+            // Force eager initialization of binding not used by other bindings:
+            Kernel.Get<PackageFileSystemWatcher>();
         }
 
         public static bool ShouldCreateIndex(LuceneDirectory dir)

@@ -45,7 +45,12 @@ namespace NuGet.Server.Infrastructure.Lucene
                 return true;
             }
 
-            var diff = fileSystem.GetLastModified(path) - lucenePackage.Published.Value;
+            return TimestampsMismatch(lucenePackage, fileSystem.GetLastModified(path));
+        }
+
+        internal static bool TimestampsMismatch(LucenePackage lucenePackage, DateTimeOffset fileLastModified)
+        {
+            var diff = fileLastModified - lucenePackage.Published.GetValueOrDefault(DateTimeOffset.MinValue);
             return Math.Abs(diff.TotalSeconds) > 1;
         }
     }

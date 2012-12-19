@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using AutoMapper;
 using Common.Logging;
 using Lucene.Net.Linq;
@@ -31,9 +32,6 @@ namespace NuGet.Server.Infrastructure.Lucene
         [Inject]
         public IPackageIndexer Indexer { get; set; }
 
-        [Inject]
-        public IPackageFileSystemWatcher FileSystemWatcher { get; set; }
-
         private volatile int maxDownloadCount;
         public int MaxDownloadCount { get { return maxDownloadCount; } }
 
@@ -49,7 +47,7 @@ namespace NuGet.Server.Infrastructure.Lucene
             UpdateMaxDownloadCount(LucenePackages);
         }
 
-        public override void AddPackage(IPackage package)
+        public override async void AddPackage(IPackage package)
         {
             Log.Info(m => m("Adding package {0} {1} to file system", package.Id, package.Version));
 
@@ -57,10 +55,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             Log.Info(m => m("Indexing package {0} {1}", package.Id, package.Version));
 
-            // Tell the watcher to index the package now that it's done being written.
-            FileSystemWatcher.EndQuietTime(GetPackageFilePath(package));
-
-            Log.Info(m => m("Package {0} {1} indexing complete.", package.Id, package.Version));
+            await Indexer.AddPackage(Convert(package));
         }
 
         public override void IncrementDownloadCount(IPackage package)
@@ -170,7 +165,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public LucenePackage LoadFromFileSystem(string path)
         {
-            return Convert(OpenPackage(path));
+            return Convert(OpenPackage(path), new LucenePackage(FileSystem, _ => FileSystem.OpenFile(path)));
         }
 
         public LucenePackage Convert(IPackage package)

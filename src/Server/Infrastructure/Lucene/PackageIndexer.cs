@@ -132,7 +132,6 @@ namespace NuGet.Server.Infrastructure.Lucene
             IndexDifferences differences = null;
             Action findDifferences = () =>
                 {
-                    
                     using (UpdateStatus(IndexingState.Scanning))
                     {
                         using (var session = OpenSession())
@@ -200,7 +199,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
             var i = 0;
 
-            Parallel.ForEach(pathsToIndex, new ParallelOptions() { MaxDegreeOfParallelism = 5 }, (p, s) =>
+            Parallel.ForEach(pathsToIndex, new ParallelOptions { MaxDegreeOfParallelism = 5 }, (p, s) =>
                 {
                     using(UpdateStatus(IndexingState.Building, completedPackages: Interlocked.Increment(ref i), packagesToIndex: pathsToIndex.Length, currentPackagePath: p))
                     {

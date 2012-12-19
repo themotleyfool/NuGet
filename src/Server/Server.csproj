@@ -72,6 +72,18 @@
     <Reference Include="System" />
     <Reference Include="System.Data.Services" />
     <Reference Include="System.Data.Services.Client" />
+    <Reference Include="System.Reactive.Core">
+      <HintPath>..\..\packages\Rx-Core.2.0.21114\lib\Net45\System.Reactive.Core.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.Interfaces">
+      <HintPath>..\..\packages\Rx-Interfaces.2.0.21114\lib\Net45\System.Reactive.Interfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.Linq">
+      <HintPath>..\..\packages\Rx-Linq.2.0.21114\lib\Net45\System.Reactive.Linq.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Reactive.PlatformServices">
+      <HintPath>..\..\packages\Rx-PlatformServices.2.0.21114\lib\Net45\System.Reactive.PlatformServices.dll</HintPath>
+    </Reference>
     <Reference Include="System.ServiceModel" />
     <Reference Include="System.ServiceModel.Activation" />
     <Reference Include="System.ServiceModel.Web" />
@@ -118,7 +130,6 @@
     <Compile Include="Infrastructure\Lucene\PackageFileSystemWatcher.cs" />
     <Compile Include="Infrastructure\Lucene\PackageIndexer.cs" />
     <Compile Include="Infrastructure\Lucene\StrictSemanticVersion.cs" />
-    <Compile Include="Infrastructure\Lucene\TimerHelper.cs" />
     <Compile Include="Infrastructure\OneFolderPerPackageIdPathResolver.cs" />
     <Compile Include="Log.cs" />
     <Compile Include="Models\SearchForm.cs" />

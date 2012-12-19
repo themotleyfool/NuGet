@@ -1,5 +1,8 @@
 using System;
+using System.Globalization;
 using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
 using Common.Logging;
 using Moq;
 using NuGet.Server.Infrastructure.Lucene;
@@ -30,43 +33,43 @@ namespace Server.Test.Lucene
         }
 
         [Fact]
-        public void PackageModified()
+        public async Task PackageModified()
         {
-            SetupAddPackage("Sample.1.0.nupkg");
-
-            watcher.OnPackageModified(this, new FileSystemEventArgs(WatcherChangeTypes.Changed, ".", "Sample.1.0.nupkg"));
+            SetupPackageIsModified("Sample.1.0.nupkg");
+            
+            await watcher.OnPackageModified(@".\Sample.1.0.nupkg");
 
             loader.Verify();
             indexer.Verify();
         }
 
         [Fact]
-        public void PackageModified_HandlesException()
+        public async Task PackageModified_HandlesException()
         {
             var exception = new Exception("mock error");
 
-            loader.Setup(ld => ld.LoadFromFileSystem(@".\Sample.1.0.nupkg")).Throws(exception);
+            loader.Setup(ld => ld.LoadFromIndex(@".\Sample.1.0.nupkg")).Throws(exception);
             log.Setup(l => l.Error(exception));
 
-            watcher.OnPackageModified(this, new FileSystemEventArgs(WatcherChangeTypes.Changed, ".", "Sample.1.0.nupkg"));
+            await watcher.OnPackageModified(@".\Sample.1.0.nupkg");
 
             loader.Verify();
             indexer.Verify();
         }
 
         [Fact]
-        public void PackageDeleted()
+        public async Task PackageDeleted()
         {
             SetupDeletePackage("Sample.1.0.nupkg");
 
-            watcher.OnPackageDeleted(this, new FileSystemEventArgs(WatcherChangeTypes.Deleted, ".", "Sample.1.0.nupkg"));
+            await watcher.OnPackageDeleted(@".\Sample.1.0.nupkg");
 
             loader.Verify();
             indexer.Verify();
         }
 
         [Fact]
-        public void PackageDeleted_HandlesException()
+        public async Task PackageDeleted_HandlesException()
         {
             var exception = new Exception("mock error");
             var lucenePackage = new LucenePackage(fileSystem.Object);
@@ -75,31 +78,42 @@ namespace Server.Test.Lucene
             indexer.Setup(idx => idx.RemovePackage(lucenePackage)).Throws(exception);
             log.Setup(l => l.Error(exception));
 
-            watcher.OnPackageDeleted(this, new FileSystemEventArgs(WatcherChangeTypes.Changed, ".", "Sample.1.0.nupkg"));
+            await watcher.OnPackageDeleted("Sample.1.0.nupkg");
 
             loader.Verify();
             indexer.Verify();
         }
 
         [Fact]
-        public void PackageDeleted_IgnoresPackageMissingFromIndex()
+        public async Task PackageDeleted_IgnoresPackageMissingFromIndex()
         {
-            loader.Setup(ld => ld.LoadFromIndex(@".\Sample.1.0.nupkg")).Returns((LucenePackage)null);
+            loader.Setup(ld => ld.LoadFromIndex(@"Sample.1.0.nupkg")).Returns((LucenePackage)null);
 
-            watcher.OnPackageDeleted(this, new FileSystemEventArgs(WatcherChangeTypes.Deleted, ".", "Sample.1.0.nupkg"));
+            await watcher.OnPackageDeleted("Sample.1.0.nupkg");
 
             loader.Verify();
             indexer.Verify();
         }
 
         [Fact]
-        public void PackageRenamed()
+        public async Task PackageRenamed()
         {
             SetupDeletePackage("tmp.nupkg");
-            SetupAddPackage("Sample.1.0.nupkg");
+            SetupPackageIsModified("Sample.1.0.nupkg");
 
-            watcher.OnPackageRenamed(this, new RenamedEventArgs(WatcherChangeTypes.Renamed, ".", "Sample.1.0.nupkg", "tmp.nupkg"));
+            await watcher.OnPackageRenamed(@".\tmp.nupkg", @".\Sample.1.0.nupkg");
 
+            loader.Verify();
+            indexer.Verify();
+        }
+
+        [Fact]
+        public async Task PackageRenamed_IgnoresNonPackageExtension()
+        {
+            SetupDeletePackage("Sample.1.0.nupkg");
+            
+            await watcher.OnPackageRenamed(@".\Sample.1.0.nupkg", @".\IgnoreMe.tmp");
+            
             loader.Verify();
             indexer.Verify();
         }
@@ -112,7 +126,7 @@ namespace Server.Test.Lucene
             fileSystem.Setup(fs => fs.GetFiles(dir, "*.nupkg", true)).Returns(new[] { "Sample.1.0.nupkg" });
             indexer.Setup(idx => idx.SynchronizeIndexWithFileSystem());
 
-            watcher.OnDirectoryMoved(this, new FileSystemEventArgs(WatcherChangeTypes.Created, Path.GetDirectoryName(dir), Path.GetFileName(dir)));
+            watcher.OnDirectoryMoved(Path.GetDirectoryName(dir));
 
             fileSystem.Verify();
             indexer.Verify();
@@ -125,24 +139,34 @@ namespace Server.Test.Lucene
 
             fileSystem.Setup(fs => fs.GetFiles(dir, "*.nupkg", true)).Returns(new string[0]);
 
-            watcher.OnDirectoryMoved(this, new FileSystemEventArgs(WatcherChangeTypes.Created, Path.GetDirectoryName(dir), Path.GetFileName(dir)));
+            watcher.OnDirectoryMoved(Path.GetDirectoryName(dir));
 
             fileSystem.Verify();
             indexer.Verify();
         }
 
-        private void SetupAddPackage(string filename)
+        private void SetupPackageIsModified(string filename)
         {
             var lucenePackage = new LucenePackage(fileSystem.Object);
-            loader.Setup(ld => ld.LoadFromFileSystem(@".\" + filename)).Returns(lucenePackage);
-            indexer.Setup(idx => idx.AddPackage(lucenePackage));
+            loader.Setup(ld => ld.LoadFromIndex(@".\" + filename)).Returns((LucenePackage)null).Verifiable();
+            loader.Setup(ld => ld.LoadFromFileSystem(@".\" + filename)).Returns(lucenePackage).Verifiable();
+            indexer.Setup(idx => idx.AddPackage(lucenePackage)).Returns(Task.FromResult<object>(null)).Verifiable();
+        }
+
+        private void SetupPackageIsNotModified(string filename)
+        {
+            var lucenePackage = new LucenePackage(fileSystem.Object) { Published = null };
+
+            loader.Setup(ld => ld.LoadFromIndex(@".\" + filename)).Returns(lucenePackage).Verifiable();
+            loader.Setup(ld => ld.LoadFromFileSystem(@".\" + filename)).Returns(lucenePackage).Verifiable();
+            indexer.Setup(idx => idx.AddPackage(lucenePackage)).Verifiable();
         }
 
         private void SetupDeletePackage(string filename)
         {
             var lucenePackage = new LucenePackage(fileSystem.Object);
-            loader.Setup(ld => ld.LoadFromIndex(@".\" + filename)).Returns(lucenePackage);
-            indexer.Setup(idx => idx.RemovePackage(lucenePackage));
+            loader.Setup(ld => ld.LoadFromIndex(@".\" + filename)).Returns(lucenePackage).Verifiable();
+            indexer.Setup(idx => idx.RemovePackage(lucenePackage)).Returns(Task.FromResult<object>(null)).Verifiable();
         }
     }
 

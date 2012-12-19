@@ -2,33 +2,21 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Threading;
+using System.Reactive;
+using System.Reactive.Linq;
 using System.Threading.Tasks;
 using Common.Logging;
 using Ninject;
 
 namespace NuGet.Server.Infrastructure.Lucene
 {
-    public interface IPackageFileSystemWatcher
+    public class PackageFileSystemWatcher : IInitializable, IDisposable
     {
-        /// <summary>
-        /// Tell watcher that a package contents have been completely written to disk
-        /// and it is safe to index the package. If the package is already being indexed
-        /// on another thread, this method will block until the operation completes.
-        /// </summary>
-        void EndQuietTime(string path);
-    }
-
-    public class PackageFileSystemWatcher : IPackageFileSystemWatcher, IInitializable, IDisposable
-    {
-        public const string FullReindexTimerKey = "**PackageFileSystemWatcher.Reindex**";
-
         public static ILog Log = LogManager.GetLogger<PackageFileSystemWatcher>();
 
-        private readonly TimerHelper timerHelper;
         private FileSystemWatcher fileWatcher;
-        private FileSystemWatcher dirWatcher;
-        private readonly IDictionary<string, EventWaitHandle> indexMonitors = new Dictionary<string, EventWaitHandle>();
+        private IDisposable fileObserver;
+        private IDisposable dirObserver;
 
         [Inject]
         public IFileSystem FileSystem { get; set; }
@@ -48,166 +36,170 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public PackageFileSystemWatcher()
         {
-            timerHelper = new TimerHelper();
             QuietTime = TimeSpan.FromSeconds(3);
         }
 
         public void Initialize()
         {
-            fileWatcher = new FileSystemWatcher(FileSystem.Root, "*.nupkg");
+            fileWatcher = new FileSystemWatcher(FileSystem.Root, "*.nupkg")
+                {
+                    NotifyFilter = NotifyFilters.DirectoryName | NotifyFilters.FileName | NotifyFilters.LastWrite,
+                    IncludeSubdirectories = true,
+                };
 
-            fileWatcher.Changed += OnPackageModified;
-            fileWatcher.Deleted += OnPackageDeleted;
-            fileWatcher.Renamed += OnPackageRenamed;
-            fileWatcher.Created += OnPackageModified;
+            var modifiedFilesThrottledByPath = ModifiedFiles
+                .Select(args => args.EventArgs.FullPath)
+                .GroupBy(path => path)
+                .Select(groupByPath => groupByPath.Throttle(QuietTime))
+                .SelectMany(obs => obs);
+            
+#pragma warning disable 4014 // Because this call is not awaited, execution of the current method continues before the call is completed.
+            fileObserver = modifiedFilesThrottledByPath.Subscribe(path => OnPackageModified(path));
+            fileWatcher.Deleted += (s, e) => OnPackageDeleted(e.FullPath);
+            fileWatcher.Renamed += (s, e) => OnPackageRenamed(e.OldFullPath, e.FullPath);
+#pragma warning restore 4014
 
-            fileWatcher.NotifyFilter = NotifyFilters.DirectoryName | NotifyFilters.FileName | NotifyFilters.LastWrite;
-            fileWatcher.IncludeSubdirectories = true;
             fileWatcher.EnableRaisingEvents = true;
 
-            dirWatcher = new FileSystemWatcher(FileSystem.Root);
-
-            dirWatcher.Renamed += OnDirectoryMoved;
-            dirWatcher.Created += OnDirectoryMoved;
-            dirWatcher.NotifyFilter = NotifyFilters.DirectoryName;
-            dirWatcher.IncludeSubdirectories = true;
-            dirWatcher.EnableRaisingEvents = true;
-        }
-
-        public void OnDirectoryMoved(object sender, FileSystemEventArgs e)
-        {
-            if (FileSystem.GetFiles(e.FullPath, "*.nupkg", true).Any())
-            {
-                timerHelper.ResetTimer(FullReindexTimerKey, SynchronizeLater, null, QuietTime);
-            }
-        }
-
-        private void SynchronizeLater(object state)
-        {
-            try
-            {
-                Indexer.SynchronizeIndexWithFileSystem();
-            }
-            catch (Exception ex)
-            {
-                Log.Error(m => m("Unhandled exception synchronizing Lucene index with packages on file system.", ex));
-            }
+            dirObserver = MovedDirectories.Select(args => args.EventArgs.FullPath).Throttle(QuietTime).Subscribe(OnDirectoryMoved);
         }
 
         public void Dispose()
         {
+            fileObserver.Dispose();
             fileWatcher.Dispose();
-            dirWatcher.Dispose();
-            timerHelper.Dispose();
+            dirObserver.Dispose();
         }
 
-        public void OnPackageModified(object sender, FileSystemEventArgs e)
+        public void OnDirectoryMoved(string fullPath)
         {
-            timerHelper.ResetTimer(e.FullPath, AddToIndexAfterQuietTime, e, QuietTime);
-        }
-
-        public async void EndQuietTime(string path)
-        {
-            var fullPath = Path.Combine(FileSystem.Root, path);
-
-            if (!timerHelper.CancelTimer(fullPath))
+            try
             {
-                EventWaitHandle signal;
+                if (FileSystem.GetFiles(fullPath, "*.nupkg", true).IsEmpty()) return;
+            }
+            catch (IOException ex)
+            {
+                Log.Error(ex);
+                return;
+            }
 
-                lock(indexMonitors)
+            Indexer.SynchronizeIndexWithFileSystem();
+        }
+
+        public async Task OnPackageModified(string fullPath)
+        {
+            Log.Info(m => m("Indexing modified package " + fullPath));
+            await AddToIndex(fullPath).ContinueWith(LogOnFault);
+        }
+
+        public async Task OnPackageRenamed(string oldFullPath, string fullPath)
+        {
+            Log.Info(m => m("Package path {0} renamed to {1}.", oldFullPath, fullPath));
+
+            var task = RemoveFromIndex(oldFullPath).ContinueWith(LogOnFault);
+            
+            if (fullPath.EndsWith(Constants.PackageExtension))
+            {
+                var addToIndex = AddToIndex(fullPath).ContinueWith(LogOnFault);
+                await Task.WhenAll(addToIndex, task);
+                return;
+            }
+            
+            await task;
+        }
+
+        public async Task OnPackageDeleted(string fullPath)
+        {
+            Log.Info(m => m("Package path {0} deleted.", fullPath));
+
+            await RemoveFromIndex(fullPath).ContinueWith(LogOnFault);
+        }
+
+        private async Task AddToIndex(string fullPath)
+        {
+            var tasks = new List<Task>();
+
+            Action checkTimestampAndIndexPackage = () =>
                 {
-                    if (!indexMonitors.TryGetValue(fullPath, out signal))
+                    var existingPackage = PackageRepository.LoadFromIndex(fullPath);
+
+                    var flag = (existingPackage == null ||
+                            IndexDifferenceCalculator.TimestampsMismatch(existingPackage,
+                                                                         FileSystem.GetLastModified(fullPath)));
+                    if (!flag) return;
+
+                    var package = PackageRepository.LoadFromFileSystem(fullPath);
+                    tasks.Add(Indexer.AddPackage(package));
+                };
+
+            tasks.Add(Task.Factory.StartNew(checkTimestampAndIndexPackage));
+
+            await Task.WhenAll(tasks);
+        }
+
+        private async Task RemoveFromIndex(string fullPath)
+        {
+            var package = PackageRepository.LoadFromIndex(fullPath);
+            if (package != null)
+            {
+                await Indexer.RemovePackage(package);
+            }
+        }
+
+        private void LogOnFault(Task task)
+        {
+            if (task.IsFaulted)
+            {
+                Log.Error(task.Exception);
+            }
+        }
+
+        private IObservable<EventPattern<FileSystemEventArgs>> ModifiedFiles
+        {
+            get
+            {
+                var created = Observable.FromEventPattern<FileSystemEventHandler, FileSystemEventArgs>(
+                    eh => eh.Invoke,
+                    eh => fileWatcher.Created += eh,
+                    eh => fileWatcher.Created -= eh);
+                var changed = Observable.FromEventPattern<FileSystemEventHandler, FileSystemEventArgs>(
+                    eh => eh.Invoke,
+                    eh => fileWatcher.Changed += eh,
+                    eh => fileWatcher.Changed -= eh);
+
+                return created.Merge(changed);
+            }
+        }
+
+        private IObservable<EventPattern<FileSystemEventArgs>> MovedDirectories
+        {
+            get
+            {
+                Func<FileSystemWatcher> createDirWatcher = () =>
+                    new FileSystemWatcher(FileSystem.Root)
                     {
-                        Log.Trace(m => m("No monitors found for path {0}; perhaps no FileSystemWatcher events fired yet.", fullPath));
-                    }
-                }
+                        NotifyFilter = NotifyFilters.DirectoryName,
+                        IncludeSubdirectories = true,
+                        EnableRaisingEvents = true
+                    };
 
-                if (signal != null)
+                Func<FileSystemWatcher, IObservable<EventPattern<FileSystemEventArgs>>> createObservable = dirWatcher =>
                 {
-                    Log.Trace(m => m("Waiting for asynchronous indexing to complete: " + fullPath));
-                    signal.WaitOne();
-                    return;
-                }
-            }
+                    var created = Observable.FromEventPattern<FileSystemEventHandler, FileSystemEventArgs>(
+                        eh => eh.Invoke,
+                        eh => dirWatcher.Created += eh,
+                        eh => dirWatcher.Created -= eh);
+                    var renamed = Observable.FromEventPattern<RenamedEventHandler, RenamedEventArgs>(
+                        eh => eh.Invoke,
+                        eh => dirWatcher.Renamed += eh,
+                        eh => dirWatcher.Renamed -= eh);
 
-            Log.Trace(m => m("Indexing package synchronously: " + fullPath));
-            await AddToIndex(fullPath);
+                    return created.Merge(renamed.Select(re => new EventPattern<FileSystemEventArgs>(re.Sender, re.EventArgs)));
+                };
 
-            // Cancel any events that came in while we were indexing.
-            timerHelper.CancelTimer(fullPath);
-        }
-
-        private void AddToIndexAfterQuietTime(object state)
-        {
-            var e = (FileSystemEventArgs)state;
-            var fullPath = e.FullPath;
-            EventWaitHandle signal;
-
-            Log.Info(m => m("Quiet time elapsed after file activity on path {0}; Adding package to index.", fullPath));
-
-            lock(indexMonitors)
-            {
-                if (!indexMonitors.TryGetValue(fullPath, out signal))
-                {
-                    signal = new ManualResetEvent(false);
-                    indexMonitors.Add(fullPath, signal);
-                }
-            }
-
-            AddToIndex(fullPath);
-
-            lock(indexMonitors)
-            {
-                indexMonitors.Remove(fullPath);
-            }
-
-            signal.Set();
-        }
-
-        public void OnPackageRenamed(object sender, RenamedEventArgs e)
-        {
-            Log.Info(m => m("Package path {0} renamed to {1}.", e.OldFullPath, e.FullPath));
-            RemoveFromIndex(e.OldFullPath);
-            AddToIndex(e.FullPath);
-        }
-
-        public void OnPackageDeleted(object sender, FileSystemEventArgs e)
-        {
-            Log.Info(m => m("Package path {0} deleted.", e.FullPath));
-
-            RemoveFromIndex(e.FullPath);
-        }
-
-        public Task AddToIndex(string fullPath)
-        {
-            try
-            {
-                var package = PackageRepository.LoadFromFileSystem(fullPath);
-                return Indexer.AddPackage(package);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex);
-                return Task.FromResult<object>(null);
+                return Observable.Using(createDirWatcher, createObservable);
             }
         }
 
-        public void RemoveFromIndex(string fullPath)
-        {
-            try
-            {
-                var package = PackageRepository.LoadFromIndex(fullPath);
-                if (package == null)
-                {
-                    return;
-                }
-                Indexer.RemovePackage(package);
-            }
-            catch (Exception ex)
-            {
-                Log.Error(ex);
-            }
-
-        }
     }
 }
