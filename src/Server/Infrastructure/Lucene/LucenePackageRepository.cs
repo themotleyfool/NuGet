@@ -165,7 +165,7 @@ namespace NuGet.Server.Infrastructure.Lucene
 
         public LucenePackage LoadFromFileSystem(string path)
         {
-            return Convert(OpenPackage(path), new LucenePackage(FileSystem, _ => FileSystem.OpenFile(path)));
+            return Convert(path, OpenPackage(path), new LucenePackage(FileSystem, _ => FileSystem.OpenFile(path)));
         }
 
         public LucenePackage Convert(IPackage package)
@@ -177,14 +177,17 @@ namespace NuGet.Server.Infrastructure.Lucene
             return Convert(package, lucenePackage);
         }
 
-        private LucenePackage Convert(IPackage package, LucenePackage lucenePackage)
+        private LucenePackage Convert(IPackage package, LucenePackage lucenePackage) {
+            return Convert(GetPackageFilePath(lucenePackage), package, lucenePackage);
+        }
+
+        private LucenePackage Convert(string packageFilePath, IPackage package, LucenePackage lucenePackage)
         {
             Mapper.Map(package, lucenePackage);
 
-            var path = GetPackageFilePath(lucenePackage);
-            lucenePackage.Path = path;
+            lucenePackage.Path = packageFilePath;
 
-            var derivedData = CalculateDerivedData(lucenePackage, path, lucenePackage.GetStream());
+            var derivedData = CalculateDerivedData(lucenePackage, packageFilePath, lucenePackage.GetStream());
 
             Mapper.Map(derivedData, lucenePackage);
 
