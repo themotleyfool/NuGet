@@ -1,1 +1,1 @@
-## This project has been replaced by [NuGet.Lucene](https://github.com/themotleyfool/NuGet.Lucene)
+## This project has been replaced by [Klondike](https://github.com/themotleyfool/Klondike)
